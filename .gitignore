@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+*.local
+.vite
+
+# Fontes de onde o projeto nasceu (2 .jsx soltos + bundles de 600KB + zip).
+# Ficam no disco como histórico, mas não são fonte: contêm os bugs já corrigidos.
+_original/

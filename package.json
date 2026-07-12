@@ -1,0 +1,22 @@
+{
+  "name": "calculadoras-renda-fixa",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Duas calculadoras de renda fixa: comparador de títulos pelo líquido depois do IR, e a taxa prefixada que empata com um FII.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

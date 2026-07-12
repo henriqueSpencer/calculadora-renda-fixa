@@ -1,0 +1,4 @@
+# SPA fallback: /comparador e /taxa-pre são rotas do React, não arquivos.
+# Sem isso, recarregar a página numa rota (ou abrir o link direto) dá 404.
+# Lido pelo Cloudflare Pages e também pelo Netlify.
+/*  /index.html  200

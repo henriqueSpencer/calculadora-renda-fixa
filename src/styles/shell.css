@@ -1,0 +1,92 @@
+/* Casca comum às duas calculadoras: a barra de navegação.
+   Escopada em .nav* — as páginas continuam donas do seu próprio visual (.rf e .eq). */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(10, 16, 27, 0.82);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid #1f2c44;
+}
+
+.nav-w {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 18px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.nav-marca {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  color: #e9eef7;
+  text-decoration: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.nav-marca:hover { color: #f2b84b; }
+
+.nav-glifo {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: #f2b84b;
+  flex: none;
+}
+
+.nav-abas {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav-abas::-webkit-scrollbar { display: none; }
+
+.nav-aba {
+  position: relative;
+  padding: 7px 13px;
+  border-radius: 8px;
+  color: #8394ac;
+  text-decoration: none;
+  font-size: 13.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: color 0.14s, background 0.14s;
+}
+.nav-aba:hover { color: #e9eef7; background: #16223a; }
+
+.nav-aba.on {
+  color: #f2b84b;
+  background: rgba(242, 184, 75, 0.11);
+  font-weight: 600;
+}
+
+.nav-aba:focus-visible {
+  outline: 2px solid #f2b84b;
+  outline-offset: 2px;
+}
+
+/* O rótulo curto só aparece quando o longo não cabe. */
+.nav-aba .curto { display: none; }
+@media (max-width: 620px) {
+  .nav-w { gap: 14px; padding: 0 12px; }
+  .nav-marca { font-size: 0; gap: 0; }        /* sobra só o glifo */
+  .nav-aba .longo { display: none; }
+  .nav-aba .curto { display: inline; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-aba { transition: none; }
+}
