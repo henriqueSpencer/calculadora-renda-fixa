@@ -44,9 +44,15 @@ O detalhe que mais confunde nesse assunto, e que o `core` centraliza para não d
 - **O juro capitaliza em outro relógio.** No comparador, dias úteis / 252 (padrão do mercado)
   ou dias corridos / 365, à escolha. No FII, mensal — porque é assim que o fundo paga.
 
-`npm test` trava isso: os cortes da tabela, o fato de `brutoEquivalente` ser a inversa exata
-de `liquidar`, a prova de que FII / isento / tributado-líquido param no mesmo centavo, e que a
-regra de bolso (`i / (1 − α)`) só é exata em exatamente 1 ano.
+E há **dois** impostos, não um. O **IOF** morde o rendimento nos 29 primeiros dias (96% no 1º,
+zero no 30º) e é cobrado *antes* do IR, que incide só sobre o que sobrou — as alíquotas se
+compõem, não se somam: `α = 1 − (1−IOF)(1−IR)`. É o que transforma um bom CDB num péssimo
+negócio de curtíssimo prazo.
+
+`npm test` trava isso: os cortes das duas tabelas (IR e IOF, esta conferida dia a dia contra o
+decreto), o fato de `brutoEquivalente` ser a inversa exata de `liquidar`, a prova de que FII /
+isento / tributado-líquido param no mesmo centavo, e que a regra de bolso (`i / (1 − α)`) só é
+exata em exatamente 1 ano.
 
 ## Deploy
 

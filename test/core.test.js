@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  FAIXAS_IR, aliquotaIR, brutoEquivalente, regraDeBolso, deflate, liquidar,
+  FAIXAS_IR, aliquotaIR, aliquotaIOF, aliquotaEfetiva,
+  brutoEquivalente, regraDeBolso, deflate, liquidar,
 } from '../src/core/ir.js';
 import { diasCorridosEmMeses, acumuladoDiasUteis, addMonths, diffDays } from '../src/core/calendario.js';
 
@@ -129,4 +130,54 @@ test('deflate: o IR morde o ganho nominal, então IPCA+7 não entrega 7 reais l�
   // já o isento entrega os 7% reais cheios
   const iso = liquidar({ i: iNominal, isento: true, dias: 1500, anos: 4, capital: 1000, ipcaDec });
   perto(iso.txLiqRealAno, 0.07, 1e-12);
+});
+
+/* ---------------- IOF (Decreto 6.306/2007, Anexo I) ---------------- */
+
+test('IOF: os 30 dias da tabela batem com o decreto, dia a dia', () => {
+  const OFICIAL = [96,93,90,86,83,80,76,73,70,66,63,60,56,53,50,46,43,40,36,33,30,26,23,20,16,13,10,6,3,0];
+  for (let d = 1; d <= 30; d++) {
+    assert.equal(Math.round(aliquotaIOF(d) * 100), OFICIAL[d - 1], `dia ${d}`);
+  }
+  assert.equal(aliquotaIOF(31), 0, 'do 30º dia em diante o IOF some');
+  assert.equal(aliquotaIOF(7300), 0);
+});
+
+test('IOF: morde o rendimento antes do IR, e o IR pega só o que sobra', () => {
+  const c = liquidar({ i: 0.15, isento: false, dias: 10, anos: 10 / 365, capital: 10000, ipcaDec: 0 });
+
+  perto(c.iofReais, c.rendBruto * 0.66, 1e-9);                       // IOF do 10º dia
+  perto(c.irReais, (c.rendBruto - c.iofReais) * 0.225, 1e-9);        // IR sobre a base já reduzida
+  perto(c.rendLiq, c.rendBruto - c.iofReais - c.irReais, 1e-9);
+
+  // as alíquotas se compõem, não se somam
+  assert.ok(c.iofReais + c.irReais < c.rendBruto * (0.66 + 0.225));
+  perto(c.efetivaDec, 1 - (1 - 0.66) * (1 - 0.225), 1e-12);
+});
+
+test('IOF: some no 30º dia — é por isso que quase ninguém o vê', () => {
+  const d29 = liquidar({ i: 0.15, isento: false, dias: 29, anos: 29 / 365, capital: 10000, ipcaDec: 0 });
+  const d30 = liquidar({ i: 0.15, isento: false, dias: 30, anos: 30 / 365, capital: 10000, ipcaDec: 0 });
+  assert.ok(d29.iofReais > 0, 'no 29º dia ainda há IOF (3%)');
+  assert.equal(d30.iofReais, 0, 'no 30º dia o IOF é zero');
+
+  // um dia a mais de prazo rende MAIS dinheiro líquido, apesar do juro extra ser trivial
+  assert.ok(d30.rendLiq > d29.rendLiq);
+});
+
+test('IOF: a isenção de LCI/LCA é de imposto de RENDA, não de IOF', () => {
+  const c = liquidar({ i: 0.15, isento: true, dias: 10, anos: 10 / 365, capital: 10000, ipcaDec: 0 });
+  assert.equal(c.irReais, 0, 'isento de IR');
+  assert.ok(c.iofReais > 0, 'mas o IOF continua incidindo');
+});
+
+test('IOF: brutoEquivalente continua sendo a inversa exata, agora com a alíquota efetiva', () => {
+  for (const dias of [5, 10, 29, 30, 100, 1000]) {
+    for (const isento of [false, true]) {
+      const anos = dias / 365;
+      const c = liquidar({ i: 0.15, isento, dias, anos, capital: 1000, ipcaDec: 0 });
+      const volta = brutoEquivalente(c.txLiqAno, anos, aliquotaEfetiva(dias, isento));
+      perto(volta, 0.15, 1e-9);
+    }
+  }
 });

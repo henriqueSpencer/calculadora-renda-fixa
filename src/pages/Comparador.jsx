@@ -8,10 +8,11 @@ import {
   brl, dec, decAuto, pct, parseBR, toDraft, clamp, snap, VALID_DECIMAL,
 } from '../core/format.js';
 import {
-  FAIXAS_IR, faixaIndex, aliquotaIR, brutoEquivalente, deflate, liquidar,
+  FAIXAS_IR, faixaIndex, aliquotaIR, aliquotaIOF, aliquotaEfetiva,
+  brutoEquivalente, deflate, liquidar,
 } from '../core/ir.js';
 import {
-  MIN_D, MAX_D, hojeUTC, acumuladoDiasUteis, addDays, ymd, diffDays, fmtDate,
+  MIN_D, MAX_D, CHART_MIN_D, hojeUTC, acumuladoDiasUteis, addDays, ymd, diffDays, fmtDate,
 } from '../core/calendario.js';
 import '../styles/comparador.css';
 
@@ -20,7 +21,7 @@ const ACC_A = '#f2b84b', ACCBG_A = 'rgba(242,184,75,.15)';
 const ACC_B = '#a878f5', ACCBG_B = 'rgba(168,120,245,.16)';
 
 const CHIPS = [
-  { l: '90 d', v: 90 }, { l: '180 d', v: 180 }, { l: '181 d', v: 181 },
+  { l: '15 d', v: 15 }, { l: '30 d', v: 30 }, { l: '90 d', v: 90 }, { l: '180 d', v: 180 }, { l: '181 d', v: 181 },
   { l: '360 d', v: 360 }, { l: '361 d', v: 361 }, { l: '720 d', v: 720 },
   { l: '721 d', v: 721 }, { l: '2 anos', v: 730 }, { l: '3 anos', v: 1095 },
   { l: '5 anos', v: 1825 }, { l: '10 anos', v: 3650 },
@@ -139,9 +140,13 @@ function CompLines({ modo, p, cdi, ipca, i }) {
 
 function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
   const aliq = aliquotaIR(dias);
+  const iof = aliquotaIOF(dias);
   const net = c.txLiqAno;
-  const brutoTrib = brutoEquivalente(net, t, aliq);
-  const brutoIsento = net;
+
+  /* Num resgate de menos de 30 dias, o IOF morde os dois lados: o isento de IR
+     também paga IOF, então o "bruto do isento" deixa de ser o próprio líquido. */
+  const brutoTrib = brutoEquivalente(net, t, aliquotaEfetiva(dias, false));
+  const brutoIsento = brutoEquivalente(net, t, aliquotaEfetiva(dias, true));
   const alvoCDI = asFormat('cdi', isento ? brutoTrib : brutoIsento, cdi, ipca);
   const alvoPre = asFormat('pre', isento ? brutoTrib : brutoIsento, cdi, ipca);
 
@@ -151,7 +156,10 @@ function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
         <span className="dotAcc" />
         <div>
           <b style={{ fontSize: 15 }}>{nome}</b>
-          <div className="eqAnchor">âncora: <b>{pct(net * 100, 2)} a.a. líquido</b> · {decAuto(dias, 0)} dias corridos · IR {pct(aliq * 100, 1)}</div>
+          <div className="eqAnchor">
+            âncora: <b>{pct(net * 100, 2)} a.a. líquido</b> · {decAuto(dias, 0)} dias corridos · IR {pct(aliq * 100, 1)}
+            {iof > 0 && <> · <b style={{ color: '#f0776b' }}>IOF {pct(iof * 100, 0)}</b></>}
+          </div>
         </div>
       </div>
 
@@ -249,6 +257,12 @@ function TituloCard({ nome, setNome, modo, setModo, p, setP, isento, setIsento, 
 function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, modo, p, cdi, ipca }) {
   const fi = faixaIndex(dias);
   const b252 = base === 252;
+  const temIOF = c.iofDec > 0;
+
+  /* o passo do IOF só existe em resgates de menos de 30 dias — a numeração
+     se fecha sozinha para não pular número quando ele some */
+  let passo = 0;
+  const n = () => String(++passo);
   return (
     <div className="stepcol" style={{ '--acc': acc, '--accbg': accbg }}>
       <div className="stepcolHead">
@@ -256,11 +270,11 @@ function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, mod
         <div><b>{nome}</b><em>líq. {pct(c.txLiqAno * 100, 2)} nominal · {pct(c.txLiqRealAno * 100, 2)} real</em></div>
       </div>
 
-      <Step n="1" title="Taxa bruta nominal ao ano">
+      <Step n={n()} title="Taxa bruta nominal ao ano">
         <CompLines modo={modo} p={p} cdi={cdi} ipca={ipca} i={c.i} />
       </Step>
 
-      <Step n="2" title={b252 ? 'Prazo em anos (base 252 dias úteis)' : 'Prazo em anos (base 365 dias corridos)'}>
+      <Step n={n()} title={b252 ? 'Prazo em anos (base 252 dias úteis)' : 'Prazo em anos (base 365 dias corridos)'}>
         {b252 ? (<>
           <div><span className="op">=</span> dias úteis ÷ 252</div>
           <div><span className="op">=</span> {decAuto(du, 0)} ÷ 252</div>
@@ -272,20 +286,30 @@ function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, mod
         <div className="obs">o juro capitaliza neste relógio; o IR usa outro (dias corridos)</div>
       </Step>
 
-      <Step n="3" title="Montante bruto">
+      <Step n={n()} title="Montante bruto">
         <div><span className="op">=</span> Capital × (1 + taxa)^anos</div>
         <div><span className="op">=</span> {brl(capital)} × (1 + {dec(c.i, 4)})^{dec(c.t, 4)}</div>
         <div><span className="op">=</span> {brl(capital)} × {dec(c.fatorBruto, 6)}</div>
         <div><span className="res">= {brl(c.montanteBruto)}</span></div>
       </Step>
 
-      <Step n="4" title="Rendimento bruto (o lucro)">
+      <Step n={n()} title="Rendimento bruto (o lucro)">
         <div><span className="op">=</span> Montante bruto − Capital</div>
         <div><span className="op">=</span> {brl(c.montanteBruto)} − {brl(capital)}</div>
         <div><span className="res">= {brl(c.rendBruto)}</span></div>
       </Step>
 
-      <Step n="5" title="Alíquota de IR — sempre dias CORRIDOS">
+      {temIOF && (
+        <Step n={n()} title="IOF — o imposto que some no 30º dia">
+          <div><span className="op">prazo</span> {decAuto(dias, 0)} dias corridos — menos de 30</div>
+          <div><span className="op">tabela</span> Decreto 6.306/2007 — 96% no 1º dia, 0% no 30º</div>
+          <div><span className="op">=</span> {pct(c.iofPct, 0)} × {brl(c.rendBruto)}</div>
+          <div><span className="neg">= −{brl(c.iofReais)}</span></div>
+          <div className="obs">morde o rendimento, nunca o principal — e o IR só vem depois dele</div>
+        </Step>
+      )}
+
+      <Step n={n()} title="Alíquota de IR — sempre dias CORRIDOS">
         <div><span className="op">prazo</span> {decAuto(dias, 0)} dias corridos</div>
         <div><span className="op">faixa</span> {FAIXAS_IR[fi].faixa}</div>
         {isento
@@ -294,42 +318,43 @@ function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, mod
         <div className="obs">a tabela do IR ignora dias úteis — conta calendário, mesmo na base 252</div>
       </Step>
 
-      <Step n="6" title="IR devido">
+      <Step n={n()} title="IR devido">
         {isento
           ? <><div><span className="op">=</span> título isento</div><div><span className="res" style={{ color: '#54d1a5' }}>= {brl(0)}</span></div></>
           : <>
-            <div><span className="op">=</span> alíquota × Rendimento bruto</div>
-            <div><span className="op">=</span> {pct(c.aliqPct, 1)} × {brl(c.rendBruto)}</div>
+            <div><span className="op">=</span> alíquota × {temIOF ? 'Rendimento já sem o IOF' : 'Rendimento bruto'}</div>
+            <div><span className="op">=</span> {pct(c.aliqPct, 1)} × {brl(c.rendBruto - c.iofReais)}</div>
             <div><span className="neg">= −{brl(c.irReais)}</span></div>
+            {temIOF && <div className="obs">a base do IR é o rendimento menos o IOF — os impostos não se somam, se compõem</div>}
             {modo === 'ipca' && <div className="obs">incide sobre o ganho nominal — inclusive sobre a inflação</div>}
           </>}
       </Step>
 
-      <Step n="7" title="Rendimento líquido">
-        <div><span className="op">=</span> Rendimento bruto − IR</div>
-        <div><span className="op">=</span> {brl(c.rendBruto)} − {brl(c.irReais)}</div>
+      <Step n={n()} title="Rendimento líquido">
+        <div><span className="op">=</span> Rendimento bruto {temIOF ? '− IOF ' : ''}− IR</div>
+        <div><span className="op">=</span> {brl(c.rendBruto)} {temIOF ? `− ${brl(c.iofReais)} ` : ''}− {brl(c.irReais)}</div>
         <div><span className="res">= {brl(c.rendLiq)}</span></div>
       </Step>
 
-      <Step n="8" title="Montante líquido final">
+      <Step n={n()} title="Montante líquido final">
         <div><span className="op">=</span> Capital + Rendimento líquido</div>
         <div><span className="op">=</span> {brl(capital)} + {brl(c.rendLiq)}</div>
         <div><span className="res">= {brl(c.montanteLiq)}</span></div>
       </Step>
 
-      <Step n="9" title="Taxa líquida no período">
+      <Step n={n()} title="Taxa líquida no período">
         <div><span className="op">=</span> Rendimento líquido ÷ Capital</div>
         <div><span className="op">=</span> {brl(c.rendLiq)} ÷ {brl(capital)}</div>
         <div><span className="res">= {pct(c.fatorRendLiq * 100, 2)}</span></div>
       </Step>
 
-      <Step n="10" title="★ Taxa líquida NOMINAL ao ano">
+      <Step n={n()} title="★ Taxa líquida NOMINAL ao ano">
         <div><span className="op">=</span> (Montante líq. ÷ Capital)^(1 ÷ anos) − 1</div>
         <div><span className="op">=</span> ({dec(c.fatorLiq, 6)})^(1 ÷ {dec(c.t, 4)}) − 1</div>
         <div><span className="res" style={{ fontSize: 15 }}>= {pct(c.txLiqAno * 100, 2)} a.a.</span></div>
       </Step>
 
-      <Step n="11" title="★ Taxa líquida REAL ao ano">
+      <Step n={n()} title="★ Taxa líquida REAL ao ano">
         <div><span className="op">=</span> (1 + líq. nominal) ÷ (1 + IPCA) − 1</div>
         <div><span className="op">=</span> (1 + {pct(c.txLiqAno * 100, 2)}) ÷ (1 + {pct(ipca, 2)}) − 1</div>
         <div><span className="res" style={{ fontSize: 15 }}>= {pct(c.txLiqRealAno * 100, 2)} a.a.</span></div>
@@ -398,13 +423,13 @@ export default function Comparador() {
   const chartMax = dias > 3650 ? MAX_D : 3650;
   const chart = useMemo(() => {
     const set = new Set();
-    for (let d = MIN_D; d <= chartMax; d += Math.max(15, Math.round(chartMax / 240))) set.add(d);
-    [30, 180, 181, 360, 361, 720, 721, 1825, 3650, chartMax, dias].forEach((d) => { if (d >= MIN_D && d <= chartMax) set.add(d); });
+    for (let d = CHART_MIN_D; d <= chartMax; d += Math.max(15, Math.round(chartMax / 240))) set.add(d);
+    [30, 180, 181, 360, 361, 720, 721, 1825, 3650, chartMax, dias].forEach((d) => { if (d >= CHART_MIN_D && d <= chartMax) set.add(d); });
     const xs = Array.from(set).sort((a, b) => a - b);
     const f = (d, i, ise) => {
       const t = b252 ? Math.max(1e-6, cumDU[d] / 252) : Math.max(1e-6, d / 365);
       const rb = Math.pow(1 + i, t) - 1;
-      const a = ise ? 0 : aliquotaIR(d);
+      const a = aliquotaEfetiva(d, ise);
       const nom = Math.pow(1 + rb * (1 - a), 1 / t) - 1;
       return (real ? deflate(nom, ipcaDec) : nom) * 100;
     };
@@ -414,6 +439,10 @@ export default function Comparador() {
     const pad = Math.max(0.3, (hi - lo) * 0.18);
     return { rows, dom: [lo - pad, hi + pad] };
   }, [iA, iB, isentoA, isentoB, dias, ipcaDec, real, b252, cumDU, chartMax]);
+
+  const iofAtual = aliquotaIOF(dias);
+  const temIOF = iofAtual > 0;                /* resgate antes do 30º dia */
+  const noGrafico = dias >= CHART_MIN_D;
 
   const ticks = [30, 180, 360, 720, 1095, 1825, 2555, 3650, 5475, 7300].filter((x) => x <= chartMax);
   const sliderPct = ((dias - MIN_D) / (MAX_D - MIN_D)) * 100;
@@ -425,8 +454,10 @@ export default function Comparador() {
     { label: 'Taxa líquida nominal ao ano', a: pct(A.txLiqAno * 100, 2), b: pct(B.txLiqAno * 100, 2), av: A.txLiqAno, bv: B.txLiqAno, hl: true },
     { label: 'Taxa líquida real ao ano (acima da inflação)', a: pct(A.txLiqRealAno * 100, 2), b: pct(B.txLiqRealAno * 100, 2), av: A.txLiqRealAno, bv: B.txLiqRealAno, hl: true },
     { label: 'Taxa bruta nominal ao ano', a: pct(iA * 100, 2), b: pct(iB * 100, 2) },
+    ...(temIOF ? [{ label: 'Alíquota de IOF (resgate antes de 30 dias)', a: pct(A.iofPct, 0), b: pct(B.iofPct, 0) }] : []),
     { label: 'Alíquota de IR', a: isentoA ? 'isento' : pct(A.aliqPct, 1), b: isentoB ? 'isento' : pct(B.aliqPct, 1) },
     { label: 'Rendimento líquido', a: brl(A.rendLiq), b: brl(B.rendLiq), av: A.rendLiq, bv: B.rendLiq, hl: true },
+    ...(temIOF ? [{ label: 'IOF descontado', a: brl(A.iofReais), b: brl(B.iofReais) }] : []),
     { label: 'IR descontado', a: brl(A.irReais), b: brl(B.irReais) },
     { label: 'Montante líquido final', a: brl(A.montanteLiq), b: brl(B.montanteLiq), av: A.montanteLiq, bv: B.montanteLiq, hl: true },
   ];
@@ -541,6 +572,15 @@ export default function Comparador() {
               </div>
             </div>
             {b252 && <div className="baseNote">Padrão do mercado brasileiro: CDB, LCI/LCA, CDI, prefixados e Tesouro (inclusive IPCA+) capitalizam em dias úteis, base 252.</div>}
+
+            {temIOF && (
+              <div className="iofWarn">
+                <b>IOF de {pct(iofAtual * 100, 0)} sobre o rendimento.</b> Resgatar em {decAuto(dias, 0)} dias
+                — menos de 30 — aciona a tabela regressiva do IOF (Decreto 6.306/2007): 96% no 1º dia,
+                caindo até 0% no 30º. Ele morde o <b>rendimento</b>, nunca o principal, e o IR só incide
+                sobre o que sobra dele. É o que transforma um bom CDB num péssimo negócio de curtíssimo prazo.
+              </div>
+            )}
           </div>
 
           <div className="tipbar">
@@ -669,7 +709,7 @@ export default function Comparador() {
             <ResponsiveContainer>
               <ComposedChart data={chart.rows} margin={{ top: 8, right: 14, bottom: 6, left: -8 }}>
                 <CartesianGrid stroke="#1f2c44" vertical={false} />
-                <XAxis dataKey="dias" type="number" domain={[MIN_D, chartMax]} allowDecimals={false} ticks={ticks}
+                <XAxis dataKey="dias" type="number" domain={[CHART_MIN_D, chartMax]} allowDecimals={false} ticks={ticks}
                   tick={{ fill: '#7b8aa3', fontSize: 11, fontFamily: 'var(--mono)' }} tickLine={false} axisLine={{ stroke: '#2c3d5a' }} />
                 <YAxis domain={chart.dom} tick={{ fill: '#7b8aa3', fontSize: 11, fontFamily: 'var(--mono)' }}
                   tickFormatter={(v) => dec(v, 1) + '%'} tickLine={false} axisLine={false} width={54} />
@@ -678,14 +718,19 @@ export default function Comparador() {
                 <Tooltip content={<CustomTip />} cursor={{ stroke: '#5a6980', strokeDasharray: '4 4' }} />
                 <Line type="linear" dataKey="a" stroke={ACC_A} strokeWidth={2.4} dot={false} isAnimationActive={false} />
                 <Line type="linear" dataKey="b" stroke={ACC_B} strokeWidth={2.4} dot={false} isAnimationActive={false} />
-                <ReferenceLine x={dias} stroke="#8394ac" strokeWidth={1} strokeDasharray="2 3" strokeOpacity={0.7} />
-                <ReferenceDot x={dias} y={yA * 100} r={5} fill={ACC_A} stroke="#0d1320" strokeWidth={2} isFront />
-                <ReferenceDot x={dias} y={yB * 100} r={5} fill={ACC_B} stroke="#0d1320" strokeWidth={2} isFront />
+                {/* abaixo de 30 dias o ponto cairia fora do eixo — o gráfico começa onde o IOF acaba */}
+                {noGrafico && <>
+                  <ReferenceLine x={dias} stroke="#8394ac" strokeWidth={1} strokeDasharray="2 3" strokeOpacity={0.7} />
+                  <ReferenceDot x={dias} y={yA * 100} r={5} fill={ACC_A} stroke="#0d1320" strokeWidth={2} isFront />
+                  <ReferenceDot x={dias} y={yB * 100} r={5} fill={ACC_B} stroke="#0d1320" strokeWidth={2} isFront />
+                </>}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="axisNote">
-            eixo em dias corridos → os pontos marcam {fmtDate(vencDate)}.{' '}
+            {noGrafico
+              ? <>eixo em dias corridos → os pontos marcam {fmtDate(vencDate)}. </>
+              : <><b style={{ color: '#f0776b' }}>Seu prazo ({decAuto(dias, 0)} dias) fica fora deste gráfico</b>, que começa em 30 dias — abaixo disso o IOF domina tudo e a curva viraria uma parede. Veja a memória de cálculo. </>}
             {real
               ? <>Mostrando o ganho <b style={{ color: '#e9eef7' }}>acima da inflação</b> (IPCA {pct(ipca, 2)} descontado). A linha vermelha é o zero real.</>
               : <>Mostrando o retorno <b style={{ color: '#e9eef7' }}>nominal</b>, sem descontar a inflação.</>}
@@ -733,7 +778,8 @@ export default function Comparador() {
             <li><b>CDI + e IPCA + compõem fatores, não somam.</b> Convenção ANBIMA: "CDI + 2%" com CDI a 15% dá <span className="k">1,15 × 1,02 − 1 = 17,30%</span>. No IPCA + é a equação de Fisher: <span className="k">(1 + IPCA) × (1 + juro real) − 1</span>.</li>
             <li><b>O IR incide sobre o ganho nominal.</b> Num IPCA +, o imposto morde também a parte que era só reposição da inflação. Por isso um "IPCA + 7%" nunca entrega 7% reais líquidos.</li>
             <li><b>As equivalências valem só neste vencimento.</b> A alíquota depende dos dias corridos, então mudar a data recalcula todas as tabelas.</li>
-            <li><b>IOF fora da conta</b> (só morde antes de 30 dias). Também não entram custódia, corretagem, marcação a mercado nem come-cotas de fundos.</li>
+            <li><b>O IOF entra na conta.</b> Decreto 6.306/2007: tabela regressiva sobre o <span className="k">rendimento</span> nos 29 primeiros dias — 96% no 1º dia, 3% no 29º, zero do 30º em diante. Ele é cobrado <span className="k">antes</span> do IR, e o imposto de renda incide só sobre o que sobra dele (por isso as alíquotas não se somam: elas se compõem). Vale inclusive para papéis isentos de IR — a isenção de LCI/LCA/CRI/CRA é de imposto de <span className="k">renda</span>, não de IOF; na prática esses papéis têm carência maior que 30 dias, então o ponto é acadêmico.</li>
+            <li><b>O que continua de fora:</b> custódia (0,20% a.a. da B3 no Tesouro Direto), corretagem, marcação a mercado se você vender antes do vencimento, e come-cotas de fundos.</li>
           </ul>
         </div>
 

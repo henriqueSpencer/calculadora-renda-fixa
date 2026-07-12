@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 
 import { brl, dec, pctOf, parseBROr } from '../core/format.js';
-import { aliquotaIR, brutoEquivalente, regraDeBolso } from '../core/ir.js';
+import { aliquotaIR, aliquotaIOF, aliquotaEfetiva, brutoEquivalente, regraDeBolso } from '../core/ir.js';
 import { hojeUTC, diasCorridosEmMeses } from '../core/calendario.js';
 import '../styles/taxapre.css';
 
@@ -83,6 +83,11 @@ export default function TaxaPre() {
   const diasDe = React.useCallback((meses) => diasCorridosEmMeses(meses, hoje), [hoje]);
   const aliqDoPrazo = React.useCallback((meses) => aliquotaIR(diasDe(meses)), [diasDe]);
 
+  /* A mordida que o prefixado leva de fato: IOF (só abaixo de 30 dias) e depois o IR
+     sobre o que sobrou. Num prazo de 1 mês caindo em fevereiro são 28 dias — e aí o
+     IOF existe. Acima disso, `efetiva` é simplesmente o IR. */
+  const efetivaDoPrazo = React.useCallback((meses) => aliquotaEfetiva(diasDe(meses), false), [diasDe]);
+
   const preco = Math.max(0.01, parseBROr(precoStr));
   const div = Math.max(0, parseBROr(divStr));
 
@@ -93,32 +98,34 @@ export default function TaxaPre() {
   const anos = prazo / 12;
   const dias = diasDe(prazo);
   const alq = aliqDoPrazo(prazo);
+  const iof = aliquotaIOF(dias);
+  const efetiva = efetivaDoPrazo(prazo);
 
   const iIsento = iFII; // isento é isento: empata na mesma taxa
-  const iBruto = brutoEquivalente(iFII, anos, alq); // CDB / Tesouro Pré
+  const iBruto = brutoEquivalente(iFII, anos, efetiva); // CDB / Tesouro Pré
   const iBrutoTD = (1 + iBruto) * (1 + CUSTODIA) - 1; // com custódia da B3
   const pedagio = iBruto - iFII;
-  const bolso = regraDeBolso(iFII, alq); // a regra de bolso que todo mundo usa
+  const bolso = regraDeBolso(iFII, efetiva); // a regra de bolso que todo mundo usa
 
   /* ---- prova de que os três chegam no mesmo lugar (base R$ 1.000) ---- */
   const BASE = 1000;
   const provaFII = BASE * Math.pow(1 + dy, prazo);
   const provaIsen = BASE * Math.pow(1 + iIsento, anos);
   const provaBrutoBruto = BASE * Math.pow(1 + iBruto, anos);
-  const provaIR = (provaBrutoBruto - BASE) * alq;
+  const provaIR = (provaBrutoBruto - BASE) * efetiva;
   const provaBrutoLiq = provaBrutoBruto - provaIR;
 
   /* ---- curva: taxa equivalente × prazo ---- */
   const curva = useMemo(() => {
     const out = [];
     for (let m = 1; m <= 360; m++) {
-      const a = aliqDoPrazo(m);
+      const a = efetivaDoPrazo(m);
       const b = brutoEquivalente(iFII, m / 12, a) * 100;
       const i = iFII * 100;
       out.push({ m, isento: i, bruto: b, faixa: [i, b], aliq: a, dias: diasDe(m) });
     }
     return out;
-  }, [iFII, aliqDoPrazo, diasDe]);
+  }, [iFII, efetivaDoPrazo, diasDe]);
 
   const yMax = Math.max(...curva.map((c) => c.bruto));
   const dom = [
@@ -137,12 +144,12 @@ export default function TaxaPre() {
         key: d,
         dy: d,
         isento: iAno,
-        cells: COLS.map((m) => brutoEquivalente(iAno, m / 12, aliqDoPrazo(m))),
+        cells: COLS.map((m) => brutoEquivalente(iAno, m / 12, efetivaDoPrazo(m))),
       });
     }
     const vals = rows.flatMap((r) => r.cells);
     return { rows, lo: Math.min(...vals), hi: Math.max(...vals) };
-  }, [irFII, aliqDoPrazo]);
+  }, [irFII, efetivaDoPrazo]);
 
   const heat = (v) => {
     const t = matriz.hi === matriz.lo ? 0.5 : (v - matriz.lo) / (matriz.hi - matriz.lo);
@@ -228,8 +235,9 @@ export default function TaxaPre() {
               </div>
               <div
                 style={{
-                  fontFamily: "var(--serif)",
-                  fontSize: 34,
+                  fontFamily: "var(--mono)",
+                  fontSize: 30,
+                  fontWeight: 600,
                   color: "var(--fii)",
                   letterSpacing: "-.02em",
                   fontVariantNumeric: "tabular-nums",
@@ -295,8 +303,9 @@ export default function TaxaPre() {
             <div style={{ textAlign: "right" }}>
               <span
                 style={{
-                  fontFamily: "var(--serif)",
-                  fontSize: 30,
+                  fontFamily: "var(--mono)",
+                  fontSize: 26,
+                  fontWeight: 600,
                   color: "var(--fii)",
                   fontVariantNumeric: "tabular-nums",
                 }}
@@ -305,6 +314,7 @@ export default function TaxaPre() {
               </span>
               <span style={{ fontSize: 12, color: "var(--faint)", marginLeft: 6 }}>
                 meses · {dec(dias, 0)} dias corridos · IR de {pctOf(alq, 1)}
+                {iof > 0 && <> · <b style={{ color: "var(--warn)" }}>IOF de {pctOf(iof, 0)}</b></>}
               </span>
             </div>
           </div>
@@ -494,7 +504,7 @@ export default function TaxaPre() {
             </thead>
             <tbody>
               {PRESETS.map(([m, l]) => {
-                const a = aliqDoPrazo(m);
+                const a = efetivaDoPrazo(m);
                 const b = brutoEquivalente(iFII, m / 12, a);
                 const rb = regraDeBolso(iFII, a);
                 return (
@@ -608,6 +618,12 @@ export default function TaxaPre() {
               em <b>17,5%</b> (365 &gt; 360) e não em 20%, e "2 anos" cai em <b>15%</b> (730
               &gt; 720) e não em 17,5%. Arredondar o mês para 30 dias empurra o prazo para a
               faixa de cima e infla a taxa que o prefixado parece precisar pagar.
+              <br />
+              <br />
+              <b>Abaixo de 30 dias entra o IOF</b> (Decreto 6.306/2007): 96% do rendimento no 1º
+              dia, caindo a zero no 30º. Ele é cobrado antes do IR, que então incide só sobre o
+              que sobrou — por isso α aqui é <code>1 − (1−IOF)(1−IR)</code>, e não a soma dos dois.
+              Só morde no prazo de 1 mês, e mesmo assim apenas quando o mês é curto.
             </p>
           </div>
 

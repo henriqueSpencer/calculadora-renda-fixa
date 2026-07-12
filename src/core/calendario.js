@@ -1,8 +1,15 @@
 /* Calendário: datas em UTC puro (sem fuso, sem horário de verão) e dias úteis
    pelo calendário ANBIMA. */
 
-export const MIN_D = 30;
+/* 1 dia: prazos curtos são onde o IOF morde — esconder essa faixa seria esconder
+   justamente o imposto que ninguém lembra. */
+export const MIN_D = 1;
 export const MAX_D = 7300; /* 20 anos */
+
+/* O gráfico "taxa × prazo" começa aqui. Abaixo de 30 dias o IOF domina e a
+   anualização de um punhado de dias explode a escala — a curva viraria uma
+   parede vertical e esconderia tudo o que importa nos outros 20 anos. */
+export const CHART_MIN_D = 30;
 
 export const addDays = (dt, n) => new Date(dt.getTime() + n * 86400000);
 export const ymd = (dt) => dt.toISOString().slice(0, 10);

@@ -4,9 +4,6 @@
     --bg:#0a101b; --panel:#0f1626; --panel2:#131c2e; --line:#1f2c44; --line2:#2a3a56;
     --txt:#e9eef7; --dim:#8494ab; --faint:#5b6b83;
     --fii:#f2b84b; --isen:#4fd1a5; --trib:#6ba3e8; --warn:#e8735e;
-    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
-    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    --mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,monospace;
     background:var(--bg);color:var(--txt);font-family:var(--sans);
     padding:26px 18px 56px;font-size:14px;min-height:100%;
   }
@@ -15,7 +12,8 @@
 
   .eq .eyebrow {font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
     color:var(--faint);margin:0 0 8px;}
-  .eq h1.t {font-family:var(--serif);font-size:31px;line-height:1.12;margin:0 0 7px;font-weight:500;}
+  .eq h1.t {font-size:clamp(25px,4.2vw,38px);line-height:1.06;margin:0 0 10px;font-weight:800;
+    letter-spacing:-.022em;}
   .eq p.lede {color:var(--dim);margin:0;max-width:60ch;line-height:1.55;}
 
   .eq .card {background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:17px 19px;}
@@ -41,7 +39,7 @@
   .eq .stepper:active {transform:scale(.94);}
   .eq .fieldwrap {flex:1;position:relative;}
   .eq .field {width:100%;height:100%;background:var(--panel);border:1px solid var(--line2);border-radius:8px;
-    color:var(--txt);padding:9px 40px 9px 12px;font-family:var(--serif);font-size:21px;outline:none;
+    color:var(--txt);padding:9px 40px 9px 12px;font-family:var(--mono);font-size:19px;outline:none;
     font-variant-numeric:tabular-nums;text-align:right;letter-spacing:-.01em;}
   .eq .field:focus {border-color:var(--fii);box-shadow:0 0 0 2px rgba(242,184,75,.15);}
   .eq .field::-webkit-outer-spin-button, .eq .field::-webkit-inner-spin-button {-webkit-appearance:none;margin:0;}
@@ -76,7 +74,7 @@
   .eq .out-k {font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
     margin:0 0 3px;}
   .eq .out-w {font-size:11.5px;color:var(--faint);margin:0 0 12px;line-height:1.4;}
-  .eq .out-v {font-family:var(--serif);font-size:52px;line-height:.98;letter-spacing:-.025em;
+  .eq .out-v {font-family:var(--mono);font-size:44px;line-height:.98;letter-spacing:-.02em;font-weight:600;
     font-variant-numeric:tabular-nums;}
   .eq .out-v small {font-size:19px;letter-spacing:0;margin-left:5px;color:var(--dim);font-family:var(--sans);}
   .eq .out-f {margin-top:12px;font-size:11.5px;color:var(--dim);line-height:1.5;}

@@ -1,0 +1,16 @@
+/* Tipografia do site — fonte única da verdade.
+   Antes cada página declarava o seu próprio stack (e o taxa-pré ainda usava uma
+   serif nos títulos e nos números), o que dava duas caras diferentes para o mesmo
+   site. Qualquer página nova herda daqui: não redeclare font-family. */
+
+:root {
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Todo número que o usuário compara — taxa, prazo, dinheiro — vai em mono com
+   dígitos de largura fixa, para que as colunas alinhem na vírgula. */
+.tabular {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}

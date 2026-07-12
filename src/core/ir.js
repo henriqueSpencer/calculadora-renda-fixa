@@ -16,6 +16,32 @@ export const faixaIndex = (diasCorridos) =>
 /** Alíquota em decimal (0.225, 0.20, 0.175, 0.15) a partir dos dias CORRIDOS. */
 export const aliquotaIR = (diasCorridos) => FAIXAS_IR[faixaIndex(diasCorridos)].aliq / 100;
 
+/* IOF regressivo — Decreto 6.306/2007, Anexo I ("IOF/Títulos").
+   Morde o RENDIMENTO (nunca o principal) e só existe nos 29 primeiros dias:
+   96% no 1º dia, caindo ~3 pontos por dia, 3% no 29º, e ZERO do 30º em diante.
+   É por isso que ninguém fala dele: quase todo título de renda fixa é resgatado
+   depois disso. Mas num CDB de liquidez diária sacado em duas semanas, ele come
+   metade do rendimento.
+
+   O IOF independe da isenção de IR: LCI/LCA/CRI/CRA são isentas de imposto de
+   RENDA, não de IOF. Na prática esses papéis têm carência maior que 30 dias, o
+   que torna o ponto acadêmico — mas a conta é a conta. */
+export const aliquotaIOF = (diasCorridos) => {
+  const d = Math.floor(diasCorridos);
+  if (d >= 30) return 0;
+  if (d <= 1) return 0.96;
+  return Math.floor((100 * (30 - d)) / 30) / 100;
+};
+
+/** A mordida total sobre o rendimento: IOF primeiro, IR sobre o que sobrou.
+    Não é iof + ir — é 1 − (1−iof)(1−ir), porque o IR incide sobre a base já
+    reduzida pelo IOF. */
+export const aliquotaEfetiva = (diasCorridos, isentoIR) => {
+  const iof = aliquotaIOF(diasCorridos);
+  const ir = isentoIR ? 0 : aliquotaIR(diasCorridos);
+  return 1 - (1 - iof) * (1 - ir);
+};
+
 /**
  * Taxa BRUTA a.a. que, depois do IR cobrado uma única vez no resgate, entrega
  * exatamente a taxa líquida `iLiq` a.a. ao longo de `anos`:
@@ -49,22 +75,31 @@ export const liquidar = ({ i, isento, dias, anos, capital, ipcaDec }) => {
   const n = Math.max(1e-6, anos);
   const fatorBruto = Math.pow(1 + i, n);
   const fatorRendBruto = fatorBruto - 1;
+
+  /* A ordem importa: o IOF morde primeiro, e o IR incide sobre o que sobrou. */
+  const iofDec = aliquotaIOF(dias);
   const aliqDec = isento ? 0 : aliquotaIR(dias);
-  const fatorRendLiq = fatorRendBruto * (1 - aliqDec);
+  const efetivaDec = 1 - (1 - iofDec) * (1 - aliqDec);
+
+  const fatorRendLiq = fatorRendBruto * (1 - efetivaDec);
   const fatorLiq = 1 + fatorRendLiq;
   const txLiqAno = Math.pow(fatorLiq, 1 / n) - 1;
+
   const rendBruto = capital * fatorRendBruto;
-  const irReais = rendBruto * aliqDec;
-  const rendLiq = rendBruto - irReais;
+  const iofReais = rendBruto * iofDec;
+  const irReais = (rendBruto - iofReais) * aliqDec;
+  const rendLiq = rendBruto - iofReais - irReais;
 
   return {
     i, isento, t: n,
     fatorBruto, fatorRendBruto, fatorRendLiq, fatorLiq,
     aliqDec, aliqPct: aliqDec * 100,
+    iofDec, iofPct: iofDec * 100,
+    efetivaDec, efetivaPct: efetivaDec * 100,
     txLiqAno,
     txLiqRealAno: deflate(txLiqAno, ipcaDec),
     montanteBruto: capital * fatorBruto,
-    rendBruto, irReais, rendLiq,
+    rendBruto, iofReais, irReais, rendLiq,
     montanteLiq: capital + rendLiq,
   };
 };
