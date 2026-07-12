@@ -3,9 +3,14 @@
 SPA em React + Vite com duas calculadoras e uma navegação só. Sem backend: tudo roda no
 navegador, o build é estático.
 
-- **`/comparador`** (`src/pages/Comparador.jsx`) — dois títulos lado a lado (prefixado, % do
-  CDI, CDI+, IPCA+) pelo líquido depois do IR.
+- **`/comparador`** (`src/pages/Comparador.jsx`) — **um** título (prefixado, % do CDI, CDI+ ou
+  IPCA+): quanto ele deixa no bolso depois do IR/IOF, e a tabela de equivalências ao lado — quanto
+  cada outro formato teria que pagar para empatar, com e sem isenção.
 - **`/taxa-pre`** (`src/pages/TaxaPre.jsx`) — qual prefixado empata com o dividend yield de um FII.
+
+A rota se chama `/comparador` por herança: a página **já comparou dois títulos lado a lado** e foi
+reduzida a um só (a tela ficava tumultuada). A URL foi mantida para não quebrar links já
+compartilhados — não "conserte" isso renomeando, e não reintroduza o segundo título.
 
 ## Regra principal
 **Toda a matemática vive em `src/core/`.** As páginas só desenham. Se você precisar de uma
@@ -77,6 +82,8 @@ marcador some do gráfico e a nota explica por quê — não tente "consertar" i
 - O IOF não existia na conta, e o prazo mínimo do comparador era 30 dias — exatamente o dia em que
   o IOF zera. Não estava errado, estava inalcançável. Hoje `MIN_D` = 1 e o IOF é cobrado.
 - O taxa-pré usava uma serif nos títulos e nos números; o comparador, sans. Duas caras, um site.
+- O comparador tinha dois títulos (A e B) com veredito de quem ganhava. Hoje é um só: entrada à
+  esquerda, `EquivCard` à direita, e o veredito virou painel de resultado do próprio título.
 
 ## Deploy
 Cloudflare Pages, build `npm run build`, output `dist/`. **O único requisito de host** é o *SPA

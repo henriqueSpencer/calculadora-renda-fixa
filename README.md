@@ -2,11 +2,15 @@
 
 Duas calculadoras, um site só:
 
-- **`/comparador`** — dois títulos lado a lado (prefixado, % do CDI, CDI+, IPCA+), pelo que
-  sobra no bolso depois do IR. Matriz de equivalências, memória de cálculo, gráfico da taxa
-  líquida por prazo.
+- **`/comparador`** — descreva um título (prefixado, % do CDI, CDI+ ou IPCA+) e veja quanto ele
+  deixa no bolso depois do IR e do IOF. Ao lado, a tabela de equivalências: quanto cada um dos
+  outros formatos teria que pagar para dar exatamente o mesmo resultado, com e sem isenção.
+  Inclui memória de cálculo passo a passo e o gráfico da taxa líquida por prazo.
 - **`/taxa-pre`** — qual taxa prefixada empata com o dividend yield de um FII, na versão
   isenta e na bruta.
+
+> A rota `/comparador` é herança: a página já comparou dois títulos lado a lado. Ficou tumultuada
+> e foi reduzida a um só — a URL continua para não quebrar links compartilhados.
 
 ## Rodar
 
