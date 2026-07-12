@@ -170,6 +170,8 @@
 
 /* memória */
 .rf .stepcols{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+/* memória de cálculo de um título só: uma coluna, sem a caixa vazia ao lado */
+.rf .stepcols.solo{ grid-template-columns:1fr; }
 .rf .stepcol{ display:flex; flex-direction:column; gap:10px; }
 .rf .stepcolHead{ display:flex; align-items:center; gap:10px; padding-bottom:5px; border-bottom:1px solid var(--line); margin-bottom:2px; }
 .rf .stepcolHead b{ font-size:14.5px; }

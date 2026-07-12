@@ -8,11 +8,11 @@ import './styles/shell.css';
 const ROTAS = [
   {
     path: '/comparador',
-    nav: 'Comparador de títulos',
-    navCurta: 'Comparador',
+    nav: 'Rendimento e equivalências',
+    navCurta: 'Renda fixa',
     Page: Comparador,
-    title: 'Comparador de Renda Fixa — rendimento líquido depois do IR',
-    desc: 'Compare dois títulos de renda fixa lado a lado: prefixado, % do CDI, CDI+ ou IPCA+. Calcula a rentabilidade líquida ao ano depois do Imposto de Renda, com tabela regressiva, matriz de equivalências e memória de cálculo completa.',
+    title: 'Renda Fixa — rendimento líquido depois do IR e taxas equivalentes',
+    desc: 'Descreva um título de renda fixa (prefixado, % do CDI, CDI+ ou IPCA+) e veja quanto ele deixa no bolso depois do IR e do IOF — e quanto cada outro formato teria que pagar para empatar com ele, com e sem isenção.',
   },
   {
     path: '/taxa-pre',

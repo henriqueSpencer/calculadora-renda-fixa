@@ -382,15 +382,10 @@ export default function Comparador() {
   const real = view === 'real';
   const b252 = base === 252;
 
-  const [nomeA, setNomeA] = useState('Tesouro IPCA+ 2035');
-  const [modoA, setModoA] = useState('ipca');
-  const [pA, setPA] = useState({ pre: 13, perc: 110, spread: 2, real: 7 });
-  const [isentoA, setIsentoA] = useState(false);
-
-  const [nomeB, setNomeB] = useState('LCA 93% CDI');
-  const [modoB, setModoB] = useState('cdi');
-  const [pB, setPB] = useState({ pre: 12, perc: 93, spread: 1.5, real: 6 });
-  const [isentoB, setIsentoB] = useState(true);
+  const [nome, setNome] = useState('Tesouro IPCA+ 2035');
+  const [modo, setModo] = useState('ipca');
+  const [p, setP] = useState({ pre: 13, perc: 110, spread: 2, real: 7 });
+  const [isento, setIsento] = useState(false);
 
   /* datas */
   const vencDate = addDays(hoje, dias);
@@ -409,16 +404,8 @@ export default function Comparador() {
   const duAtual = duFor(dias);
   const tAtual = tFor(dias);
 
-  const iA = grossRate(modoA, pA, cdi, ipca);
-  const iB = grossRate(modoB, pB, cdi, ipca);
-  const A = liquidar({ i: iA, isento: isentoA, dias, anos: tAtual, capital, ipcaDec });
-  const B = liquidar({ i: iB, isento: isentoB, dias, anos: tAtual, capital, ipcaDec });
-
-  const aWins = A.txLiqAno >= B.txLiqAno;
-  const winName = aWins ? nomeA : nomeB;
-  const dPp = Math.abs(real ? A.txLiqRealAno - B.txLiqRealAno : A.txLiqAno - B.txLiqAno) * 100;
-  const dReais = Math.abs(A.montanteLiq - B.montanteLiq);
-  const empate = Math.abs(A.txLiqAno - B.txLiqAno) * 100 < 0.005;
+  const iBruta = grossRate(modo, p, cdi, ipca);
+  const T = liquidar({ i: iBruta, isento, dias, anos: tAtual, capital, ipcaDec });
 
   const chartMax = dias > 3650 ? MAX_D : 3650;
   const chart = useMemo(() => {
@@ -433,12 +420,12 @@ export default function Comparador() {
       const nom = Math.pow(1 + rb * (1 - a), 1 / t) - 1;
       return (real ? deflate(nom, ipcaDec) : nom) * 100;
     };
-    const rows = xs.map((d) => ({ dias: d, a: f(d, iA, isentoA), b: f(d, iB, isentoB) }));
+    const rows = xs.map((d) => ({ dias: d, a: f(d, iBruta, isento) }));
     let lo = Infinity, hi = -Infinity;
-    rows.forEach((r) => { lo = Math.min(lo, r.a, r.b); hi = Math.max(hi, r.a, r.b); });
+    rows.forEach((r) => { lo = Math.min(lo, r.a); hi = Math.max(hi, r.a); });
     const pad = Math.max(0.3, (hi - lo) * 0.18);
     return { rows, dom: [lo - pad, hi + pad] };
-  }, [iA, iB, isentoA, isentoB, dias, ipcaDec, real, b252, cumDU, chartMax]);
+  }, [iBruta, isento, dias, ipcaDec, real, b252, cumDU, chartMax]);
 
   const iofAtual = aliquotaIOF(dias);
   const temIOF = iofAtual > 0;                /* resgate antes do 30º dia */
@@ -446,31 +433,34 @@ export default function Comparador() {
 
   const ticks = [30, 180, 360, 720, 1095, 1825, 2555, 3650, 5475, 7300].filter((x) => x <= chartMax);
   const sliderPct = ((dias - MIN_D) / (MAX_D - MIN_D)) * 100;
-  const yA = real ? A.txLiqRealAno : A.txLiqAno;
-  const yB = real ? B.txLiqRealAno : B.txLiqAno;
+  const yT = real ? T.txLiqRealAno : T.txLiqAno;
   const aliqAtual = aliquotaIR(dias);
 
   const metrics = [
-    { label: 'Taxa líquida nominal ao ano', a: pct(A.txLiqAno * 100, 2), b: pct(B.txLiqAno * 100, 2), av: A.txLiqAno, bv: B.txLiqAno, hl: true },
-    { label: 'Taxa líquida real ao ano (acima da inflação)', a: pct(A.txLiqRealAno * 100, 2), b: pct(B.txLiqRealAno * 100, 2), av: A.txLiqRealAno, bv: B.txLiqRealAno, hl: true },
-    { label: 'Taxa bruta nominal ao ano', a: pct(iA * 100, 2), b: pct(iB * 100, 2) },
-    ...(temIOF ? [{ label: 'Alíquota de IOF (resgate antes de 30 dias)', a: pct(A.iofPct, 0), b: pct(B.iofPct, 0) }] : []),
-    { label: 'Alíquota de IR', a: isentoA ? 'isento' : pct(A.aliqPct, 1), b: isentoB ? 'isento' : pct(B.aliqPct, 1) },
-    { label: 'Rendimento líquido', a: brl(A.rendLiq), b: brl(B.rendLiq), av: A.rendLiq, bv: B.rendLiq, hl: true },
-    ...(temIOF ? [{ label: 'IOF descontado', a: brl(A.iofReais), b: brl(B.iofReais) }] : []),
-    { label: 'IR descontado', a: brl(A.irReais), b: brl(B.irReais) },
-    { label: 'Montante líquido final', a: brl(A.montanteLiq), b: brl(B.montanteLiq), av: A.montanteLiq, bv: B.montanteLiq, hl: true },
+    { label: 'Capital investido', v: brl(capital) },
+    { label: 'Taxa bruta nominal ao ano', v: pct(iBruta * 100, 2) },
+    { label: 'Montante bruto no vencimento', v: brl(T.montanteBruto) },
+    { label: 'Rendimento bruto', v: brl(T.rendBruto) },
+    ...(temIOF ? [
+      { label: 'Alíquota de IOF (resgate antes de 30 dias)', v: pct(T.iofPct, 0) },
+      { label: 'IOF descontado', v: '− ' + brl(T.iofReais), neg: true },
+    ] : []),
+    { label: 'Alíquota de IR', v: isento ? 'isento' : pct(T.aliqPct, 1) },
+    { label: 'IR descontado', v: '− ' + brl(T.irReais), neg: true },
+    { label: 'Rendimento líquido', v: brl(T.rendLiq), hl: true },
+    { label: 'Montante líquido final', v: brl(T.montanteLiq), hl: true },
+    { label: 'Taxa líquida nominal ao ano', v: pct(T.txLiqAno * 100, 2), hl: true },
+    { label: 'Taxa líquida real ao ano (acima da inflação)', v: pct(T.txLiqRealAno * 100, 2), hl: true },
   ];
 
   const CustomTip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null;
     const va = payload.find((x) => x.dataKey === 'a')?.value || 0;
-    const vb = payload.find((x) => x.dataKey === 'b')?.value || 0;
     return (
       <div style={{ background: '#0d1626', border: '1px solid #2c3d5a', borderRadius: 10, padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 12.5 }}>
         <div style={{ color: '#8394ac', marginBottom: 5 }}>{decAuto(label, 0)} dias · {decAuto(cumDU[label] || 0, 0)} úteis · líq. {real ? 'real' : 'nominal'}</div>
-        <div style={{ color: ACC_A }}>{nomeA}: {pct(va, 2)} a.a.</div>
-        <div style={{ color: ACC_B, marginTop: 2 }}>{nomeB}: {pct(vb, 2)} a.a.</div>
+        <div style={{ color: ACC_A }}>{nome}: {pct(va, 2)} a.a.</div>
+        <div style={{ color: '#8394ac', marginTop: 2 }}>IR da faixa: {pct(aliquotaIR(label) * 100, 1)}</div>
       </div>
     );
   };
@@ -479,18 +469,20 @@ export default function Comparador() {
     <div className="rf">
       <div className="wrap">
 
-        <div className="eyebrow">Renda fixa · comparador de rendimento líquido</div>
-        <h1>Qual dos dois títulos sobra mais no bolso</h1>
+        <div className="eyebrow">Renda fixa · rendimento líquido e equivalências</div>
+        <h1>Quanto este título deixa, de fato, no seu bolso</h1>
         <p className="sub">
-          Informe o prazo em dias <b style={{ color: '#e9eef7' }}>ou a data de vencimento</b> — o dash conta os dias sozinho, nas duas moedas que importam:
-          <b style={{ color: '#e9eef7' }}> dias corridos</b> para a faixa do IR e <b style={{ color: '#e9eef7' }}>dias úteis</b> para a capitalização base 252.
+          Descreva o título de um jeito só — e veja <b style={{ color: '#e9eef7' }}>quanto ele teria que pagar em cada um dos outros formatos</b> para
+          dar exatamente o mesmo resultado, com e sem IR. Informe o prazo em dias <b style={{ color: '#e9eef7' }}>ou a data de vencimento</b>:
+          o dash conta sozinho nas duas moedas que importam — <b style={{ color: '#e9eef7' }}>dias corridos</b> para a faixa do imposto
+          e <b style={{ color: '#e9eef7' }}>dias úteis</b> para a capitalização base 252.
         </p>
 
         {/* ---------- GLOBAIS ---------- */}
         <div className="card" style={{ marginTop: 24 }}>
           <div className="gTop">
             <div className="field" style={{ marginBottom: 0 }}>
-              <span>Capital investido (nos dois)</span>
+              <span>Capital investido</span>
               <NumField value={capital} onCommit={setCapital} min={0} max={1e11} step={1000} decimals={2} prefix="R$" ariaLabel="capital investido" />
             </div>
             <div className="field" style={{ marginBottom: 0 }}>
@@ -588,90 +580,79 @@ export default function Comparador() {
           </div>
         </div>
 
-        {/* ---------- ENTRADAS ---------- */}
+        {/* ---------- O TÍTULO  |  O MESMO TÍTULO, EM OUTRAS ROUPAS ---------- */}
         <div className="titulos">
-          <TituloCard nome={nomeA} setNome={setNomeA} modo={modoA} setModo={setModoA} p={pA} setP={setPA}
-            isento={isentoA} setIsento={setIsentoA} iBruta={iA} cdi={cdi} ipca={ipca} acc={ACC_A} accbg={ACCBG_A} />
-          <TituloCard nome={nomeB} setNome={setNomeB} modo={modoB} setModo={setModoB} p={pB} setP={setPB}
-            isento={isentoB} setIsento={setIsentoB} iBruta={iB} cdi={cdi} ipca={ipca} acc={ACC_B} accbg={ACCBG_B} />
+          <TituloCard nome={nome} setNome={setNome} modo={modo} setModo={setModo} p={p} setP={setP}
+            isento={isento} setIsento={setIsento} iBruta={iBruta} cdi={cdi} ipca={ipca} acc={ACC_A} accbg={ACCBG_A} />
+          <EquivCard nome={nome} c={T} dias={dias} t={tAtual} modo={modo} isento={isento}
+            cdi={cdi} ipca={ipca} acc={ACC_B} accbg={ACCBG_B} />
         </div>
 
-        {/* ---------- VEREDITO ---------- */}
+        {/* ---------- RESULTADO ---------- */}
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="tag">Comparação · vencendo em {fmtDate(vencDate)}</div>
+          <div className="tag">Resultado · vencendo em {fmtDate(vencDate)}</div>
           <div className="verdict">
-            <div className={'vBlock' + (aWins && !empate ? ' win' : '')} style={{ '--acc': ACC_A }}>
-              {aWins && !empate && <span className="wpill">melhor líquida</span>}
-              <span className="vName">{nomeA}</span>
-              <div className="vFlow"><i>bruta {pct(iA * 100, 2)}</i><b className="k vBig">{pct(A.txLiqAno * 100, 2)}</b><i>a.a. líq. nominal</i></div>
-              <div className="vReal">real: <b className="k">{pct(A.txLiqRealAno * 100, 2)}</b> a.a. acima da inflação</div>
+            <div className="vBlock win" style={{ '--acc': ACC_A }}>
+              <span className="vName">Taxa líquida nominal</span>
+              <div className="vFlow"><i>bruta {pct(iBruta * 100, 2)}</i><b className="k vBig">{pct(T.txLiqAno * 100, 2)}</b><i>a.a. no bolso</i></div>
+              <div className="vReal">
+                {isento
+                  ? <>sem IR — o bruto chega inteiro</>
+                  : <>depois de <b className="k">{pct(T.aliqPct, 1)}</b> de IR{temIOF && <> e <b className="k">{pct(T.iofPct, 0)}</b> de IOF</>}</>}
+              </div>
             </div>
-            <div className={'vBlock' + (!aWins && !empate ? ' win' : '')} style={{ '--acc': ACC_B }}>
-              {!aWins && !empate && <span className="wpill">melhor líquida</span>}
-              <span className="vName">{nomeB}</span>
-              <div className="vFlow"><i>bruta {pct(iB * 100, 2)}</i><b className="k vBig">{pct(B.txLiqAno * 100, 2)}</b><i>a.a. líq. nominal</i></div>
-              <div className="vReal">real: <b className="k">{pct(B.txLiqRealAno * 100, 2)}</b> a.a. acima da inflação</div>
+            <div className="vBlock" style={{ '--acc': ACC_B }}>
+              <span className="vName">Taxa líquida real</span>
+              <div className="vFlow"><i>acima da inflação</i><b className="k vBig">{pct(T.txLiqRealAno * 100, 2)}</b><i>a.a. de poder de compra</i></div>
+              <div className="vReal">com IPCA projetado em <b className="k">{pct(ipca, 2)}</b> a.a.</div>
             </div>
           </div>
 
           <div className="deltaStrip">
-            {empate
-              ? <>Empate técnico: os dois entregam praticamente a mesma taxa líquida ao ano neste prazo.</>
-              : <><b style={{ color: aWins ? ACC_A : ACC_B }}>{winName}</b> rende <b className="k">{dec(dPp, 2)} p.p.</b> a.a. a mais — resgatando em {fmtDate(vencDate)}, são <b className="k">{brl(dReais)}</b> a mais no bolso com {brl(capital)} aplicados.</>}
+            Com <b className="k">{brl(capital)}</b> aplicados até {fmtDate(vencDate)}, você resgata <b className="k">{brl(T.montanteLiq)}</b>
+            {' '}— <b className="k">{brl(T.rendLiq)}</b> de rendimento líquido
+            {isento
+              ? <>, sem um centavo de imposto.</>
+              : <>, já descontados <b className="k">{brl(T.irReais + T.iofReais)}</b> de {temIOF ? 'IOF e IR' : 'IR'}.</>}
           </div>
 
           <table className="cmp">
             <thead>
               <tr>
                 <th>Métrica</th>
-                <th style={{ color: ACC_A, textAlign: 'right' }}>{nomeA}</th>
-                <th style={{ color: ACC_B, textAlign: 'right' }}>{nomeB}</th>
+                <th style={{ color: ACC_A, textAlign: 'right' }}>{nome}</th>
               </tr>
             </thead>
             <tbody>
-              {metrics.map((m) => {
-                const aB = m.hl && !empate && m.av > m.bv + 1e-9;
-                const bB = m.hl && !empate && m.bv > m.av + 1e-9;
-                return (
-                  <tr key={m.label}>
-                    <td className="ml0">{m.label}</td>
-                    <td style={{ textAlign: 'right', color: aB ? ACC_A : '#c6d2e6', fontWeight: aB ? 700 : 400 }}>{m.a}</td>
-                    <td style={{ textAlign: 'right', color: bB ? ACC_B : '#c6d2e6', fontWeight: bB ? 700 : 400 }}>{m.b}</td>
-                  </tr>
-                );
-              })}
+              {metrics.map((m) => (
+                <tr key={m.label}>
+                  <td className="ml0">{m.label}</td>
+                  <td style={{
+                    textAlign: 'right',
+                    color: m.hl ? ACC_A : m.neg ? '#f0776b' : '#c6d2e6',
+                    fontWeight: m.hl ? 700 : 400,
+                  }}>{m.v}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
 
-        {/* ---------- EQUIVALÊNCIAS ---------- */}
-        <div className="secHead">
-          <h2>O mesmo título, em outras roupas</h2>
-          <p>
-            Cada tabela mostra <b>quanto um título de outro formato teria que pagar para deixar exatamente o mesmo dinheiro no seu bolso</b>, vencendo em {fmtDate(vencDate)}.
-            Todas as taxas de uma mesma tabela são equivalentes entre si — mudam de roupa, não de resultado.
-          </p>
-        </div>
-
-        <div className="titulos" style={{ marginTop: 14 }}>
-          <EquivCard nome={nomeA} c={A} dias={dias} t={tAtual} modo={modoA} isento={isentoA} cdi={cdi} ipca={ipca} acc={ACC_A} accbg={ACCBG_A} />
-          <EquivCard nome={nomeB} c={B} dias={dias} t={tAtual} modo={modoB} isento={isentoB} cdi={cdi} ipca={ipca} acc={ACC_B} accbg={ACCBG_B} />
-        </div>
-
+        {/* ---------- COMO A EQUIVALÊNCIA SAI ---------- */}
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="cardHead"><div><h2>Como a equivalência é calculada</h2><p>É o cálculo de sempre, só que de trás para frente: parte do líquido e volta até a taxa bruta que cada formato precisaria oferecer.</p></div></div>
+          <div className="cardHead"><div><h2>Como a equivalência é calculada</h2><p>É o cálculo de sempre, só que de trás para frente: parte do líquido que o seu título entrega e volta até a taxa bruta que cada outro formato precisaria oferecer para empatar com ele.</p></div></div>
           <div className="steps2">
             <Step n="1" title="Ancorar no líquido">
-              <div>A taxa líquida ao ano do título é o alvo — é o que precisa ser igualado.</div>
-              <div style={{ marginTop: 6 }}><span className="op">alvo A</span><span className="res" style={{ color: ACC_A }}>{pct(A.txLiqAno * 100, 2)} a.a.</span></div>
-              <div><span className="op">alvo B</span><span className="res" style={{ color: ACC_B }}>{pct(B.txLiqAno * 100, 2)} a.a.</span></div>
+              <div>A taxa líquida ao ano deste título é o alvo — é o que qualquer outro formato precisa igualar.</div>
+              <div style={{ marginTop: 6 }}><span className="op">alvo</span><span className="res" style={{ color: ACC_A }}>{pct(T.txLiqAno * 100, 2)} a.a. líquido</span></div>
             </Step>
             <Step n="2" title="Desfazer o IR (voltar ao bruto)">
               <div><span className="op">bruto =</span></div>
               <div>[1 + ((1 + líquida)^anos − 1) ÷ (1 − alíquota)]^(1÷anos) − 1</div>
               <div className="obs">
-                Se o alvo for <b>isento</b>, alíquota = 0 → o bruto é o próprio líquido.<br />
-                Se o alvo <b>pagar IR</b>, alíquota = {pct(aliqAtual * 100, 1)} — faixa dos {decAuto(dias, 0)} dias corridos.
+                Se o candidato for <b>isento</b>, alíquota = 0 → o bruto é o próprio líquido.<br />
+                Se o candidato <b>pagar IR</b>, alíquota = {pct(aliqAtual * 100, 1)} — faixa dos {decAuto(dias, 0)} dias corridos.
+                {temIOF && <><br />Abaixo de 30 dias entra o <b>IOF de {pct(iofAtual * 100, 0)}</b> antes do IR — a alíquota efetiva é 1 − (1−IOF)(1−IR).</>}
               </div>
             </Step>
             <Step n="3" title="Traduzir o bruto para cada formato">
@@ -683,7 +664,7 @@ export default function Comparador() {
             </Step>
           </div>
           <div className="eqNote">
-            Conferência embutida: o equivalente <b>isento em IPCA +</b> é sempre igual à <b>taxa líquida real</b> do passo 11 — sem IR, o "+" do IPCA é literalmente o ganho acima da inflação. Os dois números batem.
+            Conferência embutida: o equivalente <b>isento em IPCA +</b> é sempre igual à <b>taxa líquida real</b> do último passo da memória de cálculo — sem IR, o "+" do IPCA é literalmente o ganho acima da inflação. Os dois números batem.
           </div>
         </div>
 
@@ -692,7 +673,7 @@ export default function Comparador() {
           <div className="cardHead">
             <div>
               <h2>Taxa líquida ao ano conforme o prazo</h2>
-              <p>Onde as linhas se cruzam, o título que vale mais a pena muda. Os degraus são as trocas de faixa do IR — em 181, 361 e 721 <b style={{ color: '#c6d2e6' }}>dias corridos</b>.</p>
+              <p>O mesmo título, resgatado em prazos diferentes. Os degraus são as trocas de faixa do IR — em 181, 361 e 721 <b style={{ color: '#c6d2e6' }}>dias corridos</b>. Repare que segurar um dia a mais, logo depois de um degrau, aumenta o que sobra no bolso.</p>
             </div>
             <div className="chartCtl">
               <div className="seg small">
@@ -700,8 +681,7 @@ export default function Comparador() {
                 <button className={real ? 'on' : ''} onClick={() => setView('real')}>Real</button>
               </div>
               <div className="legend">
-                <span><i style={{ background: ACC_A }} />{nomeA}</span>
-                <span><i style={{ background: ACC_B }} />{nomeB}</span>
+                <span><i style={{ background: ACC_A }} />{nome}</span>
               </div>
             </div>
           </div>
@@ -717,19 +697,17 @@ export default function Comparador() {
                 {real && <ReferenceLine y={0} stroke="#f0776b" strokeDasharray="4 4" strokeOpacity={0.6} />}
                 <Tooltip content={<CustomTip />} cursor={{ stroke: '#5a6980', strokeDasharray: '4 4' }} />
                 <Line type="linear" dataKey="a" stroke={ACC_A} strokeWidth={2.4} dot={false} isAnimationActive={false} />
-                <Line type="linear" dataKey="b" stroke={ACC_B} strokeWidth={2.4} dot={false} isAnimationActive={false} />
                 {/* abaixo de 30 dias o ponto cairia fora do eixo — o gráfico começa onde o IOF acaba */}
                 {noGrafico && <>
                   <ReferenceLine x={dias} stroke="#8394ac" strokeWidth={1} strokeDasharray="2 3" strokeOpacity={0.7} />
-                  <ReferenceDot x={dias} y={yA * 100} r={5} fill={ACC_A} stroke="#0d1320" strokeWidth={2} isFront />
-                  <ReferenceDot x={dias} y={yB * 100} r={5} fill={ACC_B} stroke="#0d1320" strokeWidth={2} isFront />
+                  <ReferenceDot x={dias} y={yT * 100} r={5} fill={ACC_A} stroke="#0d1320" strokeWidth={2} isFront />
                 </>}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="axisNote">
             {noGrafico
-              ? <>eixo em dias corridos → os pontos marcam {fmtDate(vencDate)}. </>
+              ? <>eixo em dias corridos → o ponto marca {fmtDate(vencDate)}. </>
               : <><b style={{ color: '#f0776b' }}>Seu prazo ({decAuto(dias, 0)} dias) fica fora deste gráfico</b>, que começa em 30 dias — abaixo disso o IOF domina tudo e a curva viraria uma parede. Veja a memória de cálculo. </>}
             {real
               ? <>Mostrando o ganho <b style={{ color: '#e9eef7' }}>acima da inflação</b> (IPCA {pct(ipca, 2)} descontado). A linha vermelha é o zero real.</>
@@ -739,10 +717,9 @@ export default function Comparador() {
 
         {/* ---------- MEMÓRIA ---------- */}
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="cardHead"><div><h2>Memória de cálculo</h2><p>Passo a passo dos dois títulos, lado a lado. Repare nos passos 2 e 5: são os dois relógios diferentes rodando no mesmo título.</p></div></div>
-          <div className="stepcols">
-            <StepsColumn nome={nomeA} c={A} capital={capital} dias={dias} du={duAtual} base={base} isento={isentoA} acc={ACC_A} accbg={ACCBG_A} modo={modoA} p={pA} cdi={cdi} ipca={ipca} />
-            <StepsColumn nome={nomeB} c={B} capital={capital} dias={dias} du={duAtual} base={base} isento={isentoB} acc={ACC_B} accbg={ACCBG_B} modo={modoB} p={pB} cdi={cdi} ipca={ipca} />
+          <div className="cardHead"><div><h2>Memória de cálculo</h2><p>De onde sai cada número, passo a passo. Repare no prazo e na alíquota: são os dois relógios diferentes rodando no mesmo título.</p></div></div>
+          <div className="stepcols solo">
+            <StepsColumn nome={nome} c={T} capital={capital} dias={dias} du={duAtual} base={base} isento={isento} acc={ACC_A} accbg={ACCBG_A} modo={modo} p={p} cdi={cdi} ipca={ipca} />
           </div>
         </div>
 
@@ -783,7 +760,7 @@ export default function Comparador() {
           </ul>
         </div>
 
-        <div className="foot">Troque o vencimento e veja as duas contagens — e o IR — se mexerem junto.</div>
+        <div className="foot">Troque o vencimento e veja as duas contagens — e o imposto — se mexerem junto.</div>
       </div>
     </div>
   );
