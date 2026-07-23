@@ -113,12 +113,12 @@ nova, **puxe delas**, não hardcode o azul/dourado antigos. As páginas ainda t�
   que **o core está correto** — não há erro de cálculo; os 16 testes são invariantes reais.
 
 ## Deploy
-Cloudflare Pages, projeto **`calculadora-renda-fixa-crm`**, no ar em
+Cloudflare Pages, projeto **`calculadora-renda-fixa`** (o subdomínio tem sufixo `-crm`), no ar em
 **https://calculadora-renda-fixa-crm.pages.dev**. Deploy é **manual** — o push no GitHub **não**
-dispara deploy. Para publicar:
+dispara deploy. Para publicar (o `--branch=main` faz ir para produção, não um preview):
 
 ```bash
-npm test && npm run build && npx wrangler pages deploy dist --project-name=calculadora-renda-fixa-crm
+npm test && npm run build && npx wrangler pages deploy dist --project-name=calculadora-renda-fixa --branch=main
 ```
 
 **O único requisito de host** é o *SPA fallback*: `/comparador` e `/taxa-pre` são rotas do React,
