@@ -60,12 +60,17 @@ nunca caem na janela do IOF, enquanto o CDB tributado do outro lado pode ter liq
 rende a Selic (usamos o campo **CDI** como proxy, pois Selic ≈ CDI), **não paga IOF** e o **IR
 fica travado em 15%** (a faixa mínima) em qualquer prazo — modelo simplificado a pedido. No core
 isso é a flag `smartSelic` de `liquidar` (+ `IR_SMART_SELIC`); na página é `modo === 'smart'`, que
-percorre resultado, equivalências (âncora "IR 15% fixo · sem IOF"), gráfico (curva **lisa**, sem
-degraus de faixa), memória e a banda dos relógios (sem os entalhes dos cortes). Não é isento — ao
+percorre resultado, equivalências (âncora "IR 15% fixo · sem IOF"), gráfico (o líquido dele é
+**liso** e a linha do tributado-para-empatar desce em degraus — a faixa entre elas vira a
+vantagem fiscal do ETF), memória e a banda dos relógios (sem os entalhes dos cortes). Não é isento — ao
 escolher Smart Selic, a isenção é zerada e o toggle some. Na tabela de equivalência ele **não vira
 uma linha** (`FORMATOS` = os 4 clássicos); é só um jeito de descrever o título, não um formato-alvo.
 
-O gráfico "taxa × prazo" começa em `CHART_MIN_D` (30 dias) mesmo com `MIN_D` = 1: abaixo disso o
+O gráfico "taxa × prazo" (comparador) tem **duas curvas + faixa**, no espírito do gráfico da
+taxa-pré: a de baixo é o **líquido** do título (= o que um isento pagaria para empatar) e a de
+cima é o **bruto** que um tributado precisaria mostrar para dar o mesmo, em cada prazo; a área
+entre elas é o **pedágio do IR**, que encolhe com o prazo. Ambas em taxa líquida anual, respeitando
+`real`/`nominal`. Começa em `CHART_MIN_D` (30 dias) mesmo com `MIN_D` = 1: abaixo disso o
 IOF domina e anualizar um punhado de dias explode a escala. Quando o prazo é menor que 30, o
 marcador some do gráfico e a nota explica por quê — não tente "consertar" isso plotando a faixa.
 

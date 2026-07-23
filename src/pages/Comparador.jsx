@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  ComposedChart, Line, XAxis, YAxis, CartesianGrid,
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ReferenceLine, ReferenceDot, ResponsiveContainer,
 } from 'recharts';
 
@@ -498,18 +498,26 @@ export default function Comparador() {
     for (let d = CHART_MIN_D; d <= chartMax; d += Math.max(15, Math.round(chartMax / 240))) set.add(d);
     [30, 180, 181, 360, 361, 720, 721, 1825, 3650, chartMax, dias].forEach((d) => { if (d >= CHART_MIN_D && d <= chartMax) set.add(d); });
     const xs = Array.from(set).sort((a, b) => a - b);
-    const f = (d, i, ise) => {
+    const disp = (x) => (real ? deflate(x, ipcaDec) : x) * 100;
+    /* Duas curvas, na moeda da taxa líquida anual:
+       - liq  = o que ESTE título entrega líquido em cada prazo (e o que um isento
+                precisaria pagar para empatar — no intervalo do gráfico o IOF é zero);
+       - trib = o BRUTO que um tributado (CDB, Tesouro pré) teria que mostrar para
+                empatar com esse líquido, dado o IR da faixa daquele prazo.
+       A área entre as duas é o pedágio do IR. */
+    const rows = xs.map((d) => {
       const t = b252 ? Math.max(1e-6, cumDU[d] / 252) : Math.max(1e-6, d / 365);
-      const rb = Math.pow(1 + i, t) - 1;
-      /* Smart Selic: 15% fixo e sem IOF — a curva não tem degraus de faixa. */
-      const a = smart ? IR_SMART_SELIC : aliquotaEfetiva(d, ise);
-      const nom = Math.pow(1 + rb * (1 - a), 1 / t) - 1;
-      return (real ? deflate(nom, ipcaDec) : nom) * 100;
-    };
-    const rows = xs.map((d) => ({ dias: d, a: f(d, iBruta, isento) }));
+      const rbBruta = Math.pow(1 + iBruta, t) - 1;
+      const aTit = smart ? IR_SMART_SELIC : aliquotaEfetiva(d, isento);
+      const netNom = Math.pow(1 + rbBruta * (1 - aTit), 1 / t) - 1;
+      const brutoTribNom = brutoEquivalente(netNom, t, aliquotaEfetiva(d, false));
+      const liq = disp(netNom);
+      const trib = disp(brutoTribNom);
+      return { dias: d, liq, trib, faixa: [liq, trib] };
+    });
     let lo = Infinity, hi = -Infinity;
-    rows.forEach((r) => { lo = Math.min(lo, r.a); hi = Math.max(hi, r.a); });
-    const pad = Math.max(0.3, (hi - lo) * 0.18);
+    rows.forEach((r) => { lo = Math.min(lo, r.liq); hi = Math.max(hi, r.trib); });
+    const pad = Math.max(0.3, (hi - lo) * 0.14);
     return { rows, dom: [lo - pad, hi + pad] };
   }, [iBruta, isento, smart, dias, ipcaDec, real, b252, cumDU, chartMax]);
 
@@ -520,6 +528,8 @@ export default function Comparador() {
   const ticks = [30, 180, 360, 720, 1095, 1825, 2555, 3650, 5475, 7300].filter((x) => x <= chartMax);
   const sliderPct = ((dias - MIN_D) / (MAX_D - MIN_D)) * 100;
   const yT = real ? T.txLiqRealAno : T.txLiqAno;
+  const yTribNom = brutoEquivalente(T.txLiqAno, tAtual, aliquotaEfetiva(dias, false));
+  const yTrib = real ? deflate(yTribNom, ipcaDec) : yTribNom;
   const aliqAtual = aliquotaIR(dias);
 
   const metrics = [
@@ -541,12 +551,15 @@ export default function Comparador() {
 
   const CustomTip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null;
-    const va = payload.find((x) => x.dataKey === 'a')?.value || 0;
+    const liq = payload.find((x) => x.dataKey === 'liq')?.value ?? 0;
+    const trib = payload.find((x) => x.dataKey === 'trib')?.value ?? 0;
     return (
       <div style={{ background: '#100E07', border: '1px solid #413B29', borderRadius: 10, padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 12.5 }}>
         <div style={{ color: '#9A9078', marginBottom: 5 }}>{decAuto(label, 0)} dias · {decAuto(cumDU[label] || 0, 0)} úteis · líq. {real ? 'real' : 'nominal'}</div>
-        <div style={{ color: ACC_A }}>{nome}: {pct(va, 2)} a.a.</div>
-        <div style={{ color: '#9A9078', marginTop: 2 }}>{smart ? 'IR fixo: 15,0%' : 'IR da faixa: ' + pct(aliquotaIR(label) * 100, 1)}</div>
+        <div style={{ color: ACC_A }}>{nome} (líq.): {pct(liq, 2)} a.a.</div>
+        <div style={{ color: ACC_B }}>Tributado p/ empatar (bruto): {pct(trib, 2)} a.a.</div>
+        <div style={{ color: '#E8756A', marginTop: 2 }}>Pedágio do IR: +{pct(trib - liq, 2)} p.p.</div>
+        <div style={{ color: '#9A9078', marginTop: 2 }}>IR do tributado nesse prazo: {pct(aliquotaIR(label) * 100, 1)}</div>
       </div>
     );
   };
@@ -752,10 +765,10 @@ export default function Comparador() {
         <div className="card" style={{ marginTop: 16 }}>
           <div className="cardHead">
             <div>
-              <h2>Taxa líquida ao ano conforme o prazo</h2>
+              <h2>Líquido do título e o bruto para empatar, conforme o prazo</h2>
               {smart
-                ? <p>Como o Smart Selic paga <b style={{ color: '#CFC7B4' }}>15% de IR fixo</b> e não tem IOF, a curva é <b style={{ color: '#CFC7B4' }}>lisa</b> — sem os degraus de faixa que um CDB teria. O único efeito do prazo aqui é a capitalização.</p>
-                : <p>O mesmo título, resgatado em prazos diferentes. Os degraus são as trocas de faixa do IR — em 181, 361 e 721 <b style={{ color: '#CFC7B4' }}>dias corridos</b>. Repare que segurar um dia a mais, logo depois de um degrau, aumenta o que sobra no bolso.</p>}
+                ? <p>A linha de baixo é o que o <b style={{ color: '#CFC7B4' }}>Smart Selic</b> entrega líquido (lisa: 15% fixo, sem IOF). A de cima é o <b style={{ color: '#CFC7B4' }}>bruto</b> que um CDB comum precisaria mostrar para empatar. A faixa entre elas é a <b style={{ color: '#CFC7B4' }}>vantagem fiscal</b> do ETF — e encolhe conforme o prazo passa dos 720 dias.</p>
+                : <p>A linha de baixo é o que este título entrega <b style={{ color: '#CFC7B4' }}>líquido</b> (e o que um isento pagaria para empatar). A de cima é o <b style={{ color: '#CFC7B4' }}>bruto</b> que um tributado (CDB, Tesouro pré) teria que mostrar para dar o mesmo. A faixa entre elas é o <b style={{ color: '#CFC7B4' }}>pedágio do IR</b> — e encolhe conforme o prazo alonga e a alíquota cai (181, 361, 721 dias corridos).</p>}
             </div>
             <div className="chartCtl">
               <div className="seg small">
@@ -763,7 +776,9 @@ export default function Comparador() {
                 <button className={real ? 'on' : ''} onClick={() => setView('real')}>Real</button>
               </div>
               <div className="legend">
-                <span><i style={{ background: ACC_A }} />{nome}</span>
+                <span><i style={{ background: ACC_A }} />{nome} · líquido</span>
+                <span><i style={{ background: ACC_B }} />tributado p/ empatar · bruto</span>
+                <span><i style={{ background: 'rgba(232,117,106,.5)' }} />pedágio do IR</span>
               </div>
             </div>
           </div>
@@ -778,10 +793,14 @@ export default function Comparador() {
                 {[180, 360, 720].map((b) => (<ReferenceLine key={b} x={b} stroke="#413B29" strokeDasharray="3 4" />))}
                 {real && <ReferenceLine y={0} stroke="#E8756A" strokeDasharray="4 4" strokeOpacity={0.6} />}
                 <Tooltip content={<CustomTip />} cursor={{ stroke: '#5A5238', strokeDasharray: '4 4' }} />
-                <Line type="linear" dataKey="a" stroke={ACC_A} strokeWidth={2.4} dot={false} isAnimationActive={false} />
+                {/* a faixa entre o líquido e o bruto-para-empatar = o pedágio do IR */}
+                <Area dataKey="faixa" fill="#E8756A" fillOpacity={0.12} stroke="none" isAnimationActive={false} />
+                <Line type="linear" dataKey="trib" stroke={ACC_B} strokeWidth={2.2} dot={false} isAnimationActive={false} />
+                <Line type="linear" dataKey="liq" stroke={ACC_A} strokeWidth={2.4} dot={false} isAnimationActive={false} />
                 {/* abaixo de 30 dias o ponto cairia fora do eixo — o gráfico começa onde o IOF acaba */}
                 {noGrafico && <>
                   <ReferenceLine x={dias} stroke="#9A9078" strokeWidth={1} strokeDasharray="2 3" strokeOpacity={0.7} />
+                  <ReferenceDot x={dias} y={yTrib * 100} r={4.5} fill={ACC_B} stroke="#14120C" strokeWidth={2} isFront />
                   <ReferenceDot x={dias} y={yT * 100} r={5} fill={ACC_A} stroke="#14120C" strokeWidth={2} isFront />
                 </>}
               </ComposedChart>
