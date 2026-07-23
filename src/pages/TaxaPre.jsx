@@ -151,12 +151,13 @@ export default function TaxaPre() {
     return { rows, lo: Math.min(...vals), hi: Math.max(...vals) };
   }, [irFII, efetivaDoPrazo]);
 
+  /* rampa quente da apólice: de painel escuro (taxa baixa) a latão (taxa alta) */
   const heat = (v) => {
     const t = matriz.hi === matriz.lo ? 0.5 : (v - matriz.lo) / (matriz.hi - matriz.lo);
-    const r = Math.round(28 + t * 214);
-    const g = Math.round(46 + t * 138);
-    const b = Math.round(78 - t * 3);
-    return `rgba(${r},${g},${b},${0.13 + t * 0.52})`;
+    const r = Math.round(40 + t * 191);
+    const g = Math.round(36 + t * 142);
+    const b = Math.round(22 + t * 56);
+    return `rgba(${r},${g},${b},${0.14 + t * 0.5})`;
   };
 
   const linhaAtual = Math.round((dyBruto * 100) / 0.05) * 0.05;
@@ -429,15 +430,15 @@ export default function TaxaPre() {
           <div className="legend" style={{ marginBottom: 4 }}>
             <span><i style={{ background: "var(--isen)" }} />Isento — não muda: {pctOf(iIsento)}</span>
             <span><i style={{ background: "var(--trib)" }} />Tributado, bruto</span>
-            <span><i style={{ background: "rgba(232,115,94,.5)" }} />O que o IR cobra a mais</span>
+            <span><i style={{ background: "rgba(232,117,106,.5)" }} />O que o IR cobra a mais</span>
           </div>
           <div style={{ height: 300, marginTop: 10 }}>
             <ResponsiveContainer>
               <ComposedChart data={curva} margin={{ top: 16, right: 10, bottom: 4, left: 4 }}>
-                <CartesianGrid stroke="#1a2438" strokeDasharray="2 4" vertical={false} />
-                <ReferenceArea x1={1} x2={6} fill="#e8735e" fillOpacity={0.05} />
-                <ReferenceArea x1={6} x2={12} fill="#e8735e" fillOpacity={0.035} />
-                <ReferenceArea x1={12} x2={24} fill="#e8735e" fillOpacity={0.02} />
+                <CartesianGrid stroke="#2C2819" strokeDasharray="2 4" vertical={false} />
+                <ReferenceArea x1={1} x2={6} fill="#E8756A" fillOpacity={0.05} />
+                <ReferenceArea x1={6} x2={12} fill="#E8756A" fillOpacity={0.035} />
+                <ReferenceArea x1={12} x2={24} fill="#E8756A" fillOpacity={0.02} />
                 <XAxis
                   dataKey="m"
                   scale="log"
@@ -445,30 +446,30 @@ export default function TaxaPre() {
                   type="number"
                   ticks={[1, 3, 6, 12, 24, 60, 120, 240, 360]}
                   tickFormatter={(m) => (m < 12 ? `${m}m` : `${m / 12}a`)}
-                  stroke="#3d4c66"
-                  tick={{ fill: "#5b6b83", fontSize: 10.5, fontFamily: "var(--mono)" }}
+                  stroke="#5A5238"
+                  tick={{ fill: "#8A8168", fontSize: 10.5, fontFamily: "var(--mono)" }}
                   tickLine={false}
                   allowDataOverflow
                 />
                 <YAxis
                   domain={dom}
                   tickFormatter={(v) => `${dec(v, 1)}%`}
-                  stroke="#3d4c66"
-                  tick={{ fill: "#5b6b83", fontSize: 10.5, fontFamily: "var(--mono)" }}
+                  stroke="#5A5238"
+                  tick={{ fill: "#8A8168", fontSize: 10.5, fontFamily: "var(--mono)" }}
                   tickLine={false}
                   width={52}
                 />
                 <Tooltip content={<Tip />} />
-                <Area dataKey="faixa" fill="#e8735e" fillOpacity={0.14} stroke="none" isAnimationActive={false} />
-                <Line dataKey="isento" stroke="#4fd1a5" strokeWidth={2} dot={false} isAnimationActive={false} />
-                <Line dataKey="bruto" stroke="#6ba3e8" strokeWidth={2.2} dot={false} isAnimationActive={false} />
+                <Area dataKey="faixa" fill="#E8756A" fillOpacity={0.14} stroke="none" isAnimationActive={false} />
+                <Line dataKey="isento" stroke="#5CC98D" strokeWidth={2} dot={false} isAnimationActive={false} />
+                <Line dataKey="bruto" stroke="#B79AE6" strokeWidth={2.2} dot={false} isAnimationActive={false} />
                 <ReferenceLine
                   x={prazo}
-                  stroke="#f2b84b"
+                  stroke="#E7B24E"
                   strokeDasharray="3 3"
                   label={{
                     value: `${dec(iBruto * 100)}%`,
-                    fill: "#f2b84b",
+                    fill: "#E7B24E",
                     fontSize: 11,
                     fontFamily: "var(--mono)",
                     position: "top",
@@ -570,7 +571,7 @@ export default function TaxaPre() {
                       <td className="l" style={{ color: "var(--faint)", fontSize: 10.5 }}>
                         {dec((r.dy / 100) * preco, 2)}
                       </td>
-                      <td className="isn" style={{ background: "rgba(79,209,165,.09)" }}>
+                      <td className="isn" style={{ background: "rgba(92,201,141,.09)" }}>
                         {dec(r.isento * 100)}
                       </td>
                       {r.cells.map((v, i) => (

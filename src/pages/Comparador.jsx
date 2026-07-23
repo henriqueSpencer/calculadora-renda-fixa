@@ -17,8 +17,8 @@ import {
 import '../styles/comparador.css';
 
 /* ---------------- cores ---------------- */
-const ACC_A = '#f2b84b', ACCBG_A = 'rgba(242,184,75,.15)';
-const ACC_B = '#a878f5', ACCBG_B = 'rgba(168,120,245,.16)';
+const ACC_A = '#E7B24E', ACCBG_A = 'rgba(231,178,78,.14)';
+const ACC_B = '#B79AE6', ACCBG_B = 'rgba(183,154,230,.14)';
 
 const CHIPS = [
   { l: '15 d', v: 15 }, { l: '30 d', v: 30 }, { l: '90 d', v: 90 }, { l: '180 d', v: 180 }, { l: '181 d', v: 181 },
@@ -158,7 +158,7 @@ function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
           <b style={{ fontSize: 15 }}>{nome}</b>
           <div className="eqAnchor">
             âncora: <b>{pct(net * 100, 2)} a.a. líquido</b> · {decAuto(dias, 0)} dias corridos · IR {pct(aliq * 100, 1)}
-            {iof > 0 && <> · <b style={{ color: '#f0776b' }}>IOF {pct(iof * 100, 0)}</b></>}
+            {iof > 0 && <> · <b style={{ color: '#E8756A' }}>IOF {pct(iof * 100, 0)}</b></>}
           </div>
         </div>
       </div>
@@ -313,14 +313,14 @@ function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, mod
         <div><span className="op">prazo</span> {decAuto(dias, 0)} dias corridos</div>
         <div><span className="op">faixa</span> {FAIXAS_IR[fi].faixa}</div>
         {isento
-          ? <div><span className="res" style={{ color: '#54d1a5' }}>= isento (0%)</span></div>
+          ? <div><span className="res" style={{ color: '#5CC98D' }}>= isento (0%)</span></div>
           : <div><span className="res">= {pct(FAIXAS_IR[fi].aliq, 1)}</span></div>}
         <div className="obs">a tabela do IR ignora dias úteis — conta calendário, mesmo na base 252</div>
       </Step>
 
       <Step n={n()} title="IR devido">
         {isento
-          ? <><div><span className="op">=</span> título isento</div><div><span className="res" style={{ color: '#54d1a5' }}>= {brl(0)}</span></div></>
+          ? <><div><span className="op">=</span> título isento</div><div><span className="res" style={{ color: '#5CC98D' }}>= {brl(0)}</span></div></>
           : <>
             <div><span className="op">=</span> alíquota × {temIOF ? 'Rendimento já sem o IOF' : 'Rendimento bruto'}</div>
             <div><span className="op">=</span> {pct(c.aliqPct, 1)} × {brl(c.rendBruto - c.iofReais)}</div>
@@ -360,6 +360,48 @@ function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, mod
         <div><span className="res" style={{ fontSize: 15 }}>= {pct(c.txLiqRealAno * 100, 2)} a.a.</span></div>
         <div className="obs">é o que sobra acima da inflação — o ganho de poder de compra</div>
       </Step>
+    </div>
+  );
+}
+
+/* A ASSINATURA — os dois relógios do título, lado a lado.
+   O trilho de cima conta dias CORRIDOS (o relógio do IR) e carrega os entalhes dos
+   cortes da tabela regressiva (181/361/721). O de baixo conta dias ÚTEIS (o relógio
+   do juro, base 252): a mesma janela de calendário, porém mais curta, porque dia
+   útil é sempre menos que dia corrido. Os dois miram o mesmo vencimento — a linha
+   tracejada à direita. Trocar o prazo mexe tudo junto. */
+function ClockBand({ hoje, vencDate, dias, du, aliq }) {
+  const cliffs = [181, 361, 721];
+  const utilPct = Math.max(0, Math.min(1, dias > 0 ? du / dias : 0)) * 100;
+  return (
+    <div className="clocks">
+      <div className="clockHead">
+        <span className="lbl">Os dois relógios · um só título</span>
+        <span className="dates">hoje <b>{fmtDate(hoje)}</b> &nbsp;→&nbsp; vencimento <b>{fmtDate(vencDate)}</b></span>
+      </div>
+      <div className="trackArea">
+        <div className="clkRow a">
+          <span className="clkTag">Dias corridos — o relógio do imposto</span>
+          <div className="clkRail" />
+          <div className="clkFill" style={{ width: '100%' }} />
+          {cliffs.filter((c) => c <= dias).map((c) => (
+            <div key={c} className="notch" data-d={c} style={{ left: `${(c / dias) * 100}%` }} />
+          ))}
+          <div className="clkMark" style={{ left: '100%' }} />
+        </div>
+        <div className="clkRow b">
+          <span className="clkTag">Dias úteis — o relógio do juro <b>base 252</b></span>
+          <div className="clkRail" />
+          <div className="clkFill" style={{ width: `${utilPct}%` }} />
+          <div className="clkMark" style={{ left: `${utilPct}%` }} />
+        </div>
+        <div className="vencLine" />
+      </div>
+      <div className="readouts">
+        <div className="ro corrido"><div className="k">Dias corridos → IR</div><div className="v">{decAuto(dias, 0)}</div></div>
+        <div className="ro util"><div className="k">Dias úteis → juro (252)</div><div className="v">{decAuto(du, 0)}</div></div>
+        <div className="ro faixa"><div className="k">Faixa do IR</div><div className="v">{decAuto(aliq * 100, 1)}<small>%</small></div></div>
+      </div>
     </div>
   );
 }
@@ -457,10 +499,10 @@ export default function Comparador() {
     if (!active || !payload || !payload.length) return null;
     const va = payload.find((x) => x.dataKey === 'a')?.value || 0;
     return (
-      <div style={{ background: '#0d1626', border: '1px solid #2c3d5a', borderRadius: 10, padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 12.5 }}>
-        <div style={{ color: '#8394ac', marginBottom: 5 }}>{decAuto(label, 0)} dias · {decAuto(cumDU[label] || 0, 0)} úteis · líq. {real ? 'real' : 'nominal'}</div>
+      <div style={{ background: '#100E07', border: '1px solid #413B29', borderRadius: 10, padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 12.5 }}>
+        <div style={{ color: '#9A9078', marginBottom: 5 }}>{decAuto(label, 0)} dias · {decAuto(cumDU[label] || 0, 0)} úteis · líq. {real ? 'real' : 'nominal'}</div>
         <div style={{ color: ACC_A }}>{nome}: {pct(va, 2)} a.a.</div>
-        <div style={{ color: '#8394ac', marginTop: 2 }}>IR da faixa: {pct(aliquotaIR(label) * 100, 1)}</div>
+        <div style={{ color: '#9A9078', marginTop: 2 }}>IR da faixa: {pct(aliquotaIR(label) * 100, 1)}</div>
       </div>
     );
   };
@@ -472,11 +514,14 @@ export default function Comparador() {
         <div className="eyebrow">Renda fixa · rendimento líquido e equivalências</div>
         <h1>Quanto este título deixa, de fato, no seu bolso</h1>
         <p className="sub">
-          Descreva o título de um jeito só — e veja <b style={{ color: '#e9eef7' }}>quanto ele teria que pagar em cada um dos outros formatos</b> para
-          dar exatamente o mesmo resultado, com e sem IR. Informe o prazo em dias <b style={{ color: '#e9eef7' }}>ou a data de vencimento</b>:
-          o dash conta sozinho nas duas moedas que importam — <b style={{ color: '#e9eef7' }}>dias corridos</b> para a faixa do imposto
-          e <b style={{ color: '#e9eef7' }}>dias úteis</b> para a capitalização base 252.
+          Descreva o título de um jeito só — e veja <b style={{ color: '#EDE7D6' }}>quanto ele teria que pagar em cada um dos outros formatos</b> para
+          dar exatamente o mesmo resultado, com e sem IR. Informe o prazo em dias <b style={{ color: '#EDE7D6' }}>ou a data de vencimento</b>:
+          o dash conta sozinho nas duas moedas que importam — <b style={{ color: '#EDE7D6' }}>dias corridos</b> para a faixa do imposto
+          e <b style={{ color: '#EDE7D6' }}>dias úteis</b> para a capitalização base 252.
         </p>
+
+        {/* ---------- ASSINATURA: OS DOIS RELÓGIOS ---------- */}
+        <ClockBand hoje={hoje} vencDate={vencDate} dias={dias} du={duAtual} aliq={aliqAtual} />
 
         {/* ---------- GLOBAIS ---------- */}
         <div className="card" style={{ marginTop: 24 }}>
@@ -512,7 +557,7 @@ export default function Comparador() {
                 <div className="prazoBig"><b className="k">{decAuto(dias, 0)}</b><i>dias corridos</i></div>
                 <input type="range" min={MIN_D} max={MAX_D} step="1" value={dias} aria-label="prazo em dias"
                   onChange={(e) => setDias(Number(e.target.value))}
-                  style={{ background: `linear-gradient(90deg, #cbb4e6 0%, #cbb4e6 ${sliderPct}%, #223148 ${sliderPct}%, #223148 100%)` }} />
+                  style={{ background: `linear-gradient(90deg, #B79AE6 0%, #B79AE6 ${sliderPct}%, #2C2819 ${sliderPct}%, #2C2819 100%)` }} />
                 <div className="row" style={{ marginTop: 12, gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                   <div style={{ width: 170, flex: '0 0 auto' }}>
                     <NumField value={dias} onCommit={setDias} min={MIN_D} max={MAX_D} step={1} decimals={0} suffix="dias" ariaLabel="prazo exato em dias" />
@@ -543,15 +588,6 @@ export default function Comparador() {
                 </div>
               </>
             )}
-
-            {/* resumo das duas contagens */}
-            <div className="calGrid">
-              <div className="calCell"><span>hoje</span><b>{fmtDate(hoje)}</b></div>
-              <div className="calCell"><span>vencimento</span><b>{fmtDate(vencDate)}</b></div>
-              <div className="calCell hi"><span>dias corridos → IR</span><b>{decAuto(dias, 0)}</b></div>
-              <div className="calCell hi2"><span>dias úteis → juro (252)</span><b>{decAuto(duAtual, 0)}</b></div>
-              <div className="calCell"><span>anos ({b252 ? '252' : '365'})</span><b>{dec(tAtual, 3)}</b></div>
-            </div>
 
             <div className="baseRow">
               <div>
@@ -629,7 +665,7 @@ export default function Comparador() {
                   <td className="ml0">{m.label}</td>
                   <td style={{
                     textAlign: 'right',
-                    color: m.hl ? ACC_A : m.neg ? '#f0776b' : '#c6d2e6',
+                    color: m.hl ? ACC_A : m.neg ? '#E8756A' : '#CFC7B4',
                     fontWeight: m.hl ? 700 : 400,
                   }}>{m.v}</td>
                 </tr>
@@ -673,7 +709,7 @@ export default function Comparador() {
           <div className="cardHead">
             <div>
               <h2>Taxa líquida ao ano conforme o prazo</h2>
-              <p>O mesmo título, resgatado em prazos diferentes. Os degraus são as trocas de faixa do IR — em 181, 361 e 721 <b style={{ color: '#c6d2e6' }}>dias corridos</b>. Repare que segurar um dia a mais, logo depois de um degrau, aumenta o que sobra no bolso.</p>
+              <p>O mesmo título, resgatado em prazos diferentes. Os degraus são as trocas de faixa do IR — em 181, 361 e 721 <b style={{ color: '#CFC7B4' }}>dias corridos</b>. Repare que segurar um dia a mais, logo depois de um degrau, aumenta o que sobra no bolso.</p>
             </div>
             <div className="chartCtl">
               <div className="seg small">
@@ -688,19 +724,19 @@ export default function Comparador() {
           <div style={{ width: '100%', height: 320 }}>
             <ResponsiveContainer>
               <ComposedChart data={chart.rows} margin={{ top: 8, right: 14, bottom: 6, left: -8 }}>
-                <CartesianGrid stroke="#1f2c44" vertical={false} />
+                <CartesianGrid stroke="#2C2819" vertical={false} />
                 <XAxis dataKey="dias" type="number" domain={[CHART_MIN_D, chartMax]} allowDecimals={false} ticks={ticks}
-                  tick={{ fill: '#7b8aa3', fontSize: 11, fontFamily: 'var(--mono)' }} tickLine={false} axisLine={{ stroke: '#2c3d5a' }} />
-                <YAxis domain={chart.dom} tick={{ fill: '#7b8aa3', fontSize: 11, fontFamily: 'var(--mono)' }}
+                  tick={{ fill: '#8A8168', fontSize: 11, fontFamily: 'var(--mono)' }} tickLine={false} axisLine={{ stroke: '#413B29' }} />
+                <YAxis domain={chart.dom} tick={{ fill: '#8A8168', fontSize: 11, fontFamily: 'var(--mono)' }}
                   tickFormatter={(v) => dec(v, 1) + '%'} tickLine={false} axisLine={false} width={54} />
-                {[180, 360, 720].map((b) => (<ReferenceLine key={b} x={b} stroke="#2c3d5a" strokeDasharray="3 4" />))}
-                {real && <ReferenceLine y={0} stroke="#f0776b" strokeDasharray="4 4" strokeOpacity={0.6} />}
-                <Tooltip content={<CustomTip />} cursor={{ stroke: '#5a6980', strokeDasharray: '4 4' }} />
+                {[180, 360, 720].map((b) => (<ReferenceLine key={b} x={b} stroke="#413B29" strokeDasharray="3 4" />))}
+                {real && <ReferenceLine y={0} stroke="#E8756A" strokeDasharray="4 4" strokeOpacity={0.6} />}
+                <Tooltip content={<CustomTip />} cursor={{ stroke: '#5A5238', strokeDasharray: '4 4' }} />
                 <Line type="linear" dataKey="a" stroke={ACC_A} strokeWidth={2.4} dot={false} isAnimationActive={false} />
                 {/* abaixo de 30 dias o ponto cairia fora do eixo — o gráfico começa onde o IOF acaba */}
                 {noGrafico && <>
-                  <ReferenceLine x={dias} stroke="#8394ac" strokeWidth={1} strokeDasharray="2 3" strokeOpacity={0.7} />
-                  <ReferenceDot x={dias} y={yT * 100} r={5} fill={ACC_A} stroke="#0d1320" strokeWidth={2} isFront />
+                  <ReferenceLine x={dias} stroke="#9A9078" strokeWidth={1} strokeDasharray="2 3" strokeOpacity={0.7} />
+                  <ReferenceDot x={dias} y={yT * 100} r={5} fill={ACC_A} stroke="#14120C" strokeWidth={2} isFront />
                 </>}
               </ComposedChart>
             </ResponsiveContainer>
@@ -708,10 +744,10 @@ export default function Comparador() {
           <div className="axisNote">
             {noGrafico
               ? <>eixo em dias corridos → o ponto marca {fmtDate(vencDate)}. </>
-              : <><b style={{ color: '#f0776b' }}>Seu prazo ({decAuto(dias, 0)} dias) fica fora deste gráfico</b>, que começa em 30 dias — abaixo disso o IOF domina tudo e a curva viraria uma parede. Veja a memória de cálculo. </>}
+              : <><b style={{ color: '#E8756A' }}>Seu prazo ({decAuto(dias, 0)} dias) fica fora deste gráfico</b>, que começa em 30 dias — abaixo disso o IOF domina tudo e a curva viraria uma parede. Veja a memória de cálculo. </>}
             {real
-              ? <>Mostrando o ganho <b style={{ color: '#e9eef7' }}>acima da inflação</b> (IPCA {pct(ipca, 2)} descontado). A linha vermelha é o zero real.</>
-              : <>Mostrando o retorno <b style={{ color: '#e9eef7' }}>nominal</b>, sem descontar a inflação.</>}
+              ? <>Mostrando o ganho <b style={{ color: '#EDE7D6' }}>acima da inflação</b> (IPCA {pct(ipca, 2)} descontado). A linha vermelha é o zero real.</>
+              : <>Mostrando o retorno <b style={{ color: '#EDE7D6' }}>nominal</b>, sem descontar a inflação.</>}
           </div>
         </div>
 
@@ -733,15 +769,15 @@ export default function Comparador() {
             <tbody>
               {FAIXAS_IR.map((f, idx) => (
                 <tr key={f.faixa} className={idx === faixaIndex(dias) ? 'cur' : ''}>
-                  <td>{idx === faixaIndex(dias) && <span className="dot" />}{f.faixa}</td>
-                  <td style={{ color: '#8394ac' }}>{f.intervalo}</td>
+                  <td><span className="stepbar" style={{ width: `${f.aliq * 2.4}px` }} />{idx === faixaIndex(dias) && <span className="dot" />}{f.faixa}</td>
+                  <td style={{ color: '#9A9078' }}>{f.intervalo}</td>
                   <td style={{ textAlign: 'right', fontWeight: 700 }}>{pct(f.aliq, 1)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="axisNote" style={{ textAlign: 'left', marginTop: 12 }}>
-            Faixa destacada = a dos {decAuto(dias, 0)} dias corridos até {fmtDate(vencDate)}. Os {decAuto(duAtual, 0)} dias úteis <b style={{ color: '#c6d2e6' }}>não entram</b> nesta conta.
+            Faixa destacada = a dos {decAuto(dias, 0)} dias corridos até {fmtDate(vencDate)}. Os {decAuto(duAtual, 0)} dias úteis <b style={{ color: '#CFC7B4' }}>não entram</b> nesta conta.
           </div>
         </div>
 

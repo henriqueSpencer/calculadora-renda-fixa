@@ -65,6 +65,8 @@ export default function App() {
             Renda Fixa
           </a>
 
+          <span className="nav-serial" aria-hidden="true">Lei Nº 11.033 / 2004</span>
+
           <nav className="nav-abas" aria-label="Calculadoras">
             {ROTAS.map((r) => {
               const on = r.path === atual.path;
