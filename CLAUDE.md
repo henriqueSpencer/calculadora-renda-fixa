@@ -66,11 +66,15 @@ vantagem fiscal do ETF), memória e a banda dos relógios (sem os entalhes dos c
 escolher Smart Selic, a isenção é zerada e o toggle some. Na tabela de equivalência ele **não vira
 uma linha** (`FORMATOS` = os 4 clássicos); é só um jeito de descrever o título, não um formato-alvo.
 
-O gráfico "taxa × prazo" (comparador) tem **duas curvas + faixa**, no espírito do gráfico da
-taxa-pré: a de baixo é o **líquido** do título (= o que um isento pagaria para empatar) e a de
-cima é o **bruto** que um tributado precisaria mostrar para dar o mesmo, em cada prazo; a área
-entre elas é o **pedágio do IR**, que encolhe com o prazo. Ambas em taxa líquida anual, respeitando
-`real`/`nominal`. Começa em `CHART_MIN_D` (30 dias) mesmo com `MIN_D` = 1: abaixo disso o
+O gráfico "taxa × prazo" (comparador) tem **duas visões** num toggle (`chartView`):
+- **Pedágio**: linha de baixo = **líquido** do título; linha de cima = o **bruto** que um tributado
+  precisaria mostrar para empatar. A faixa é o pedágio do IR. As linhas se aproximam mas **nunca
+  tocam** (piso de 15% de IR) — é o enquadramento do gráfico da taxa-pré.
+- **Vantagem**: as duas linhas são **líquidas** — o título e um **CDB de mesma taxa bruta**. A
+  faixa é a vantagem, e as linhas **se tocam** onde o imposto se iguala (ex.: Smart Selic vs CDB aos
+  720 dias, ambos 15%). Se o título já é um tributado comum, as linhas coincidem (vantagem zero).
+Ambas as visões em taxa líquida anual, respeitando `real`/`nominal`. Começa em `CHART_MIN_D`
+(30 dias) mesmo com `MIN_D` = 1: abaixo disso o
 IOF domina e anualizar um punhado de dias explode a escala. Quando o prazo é menor que 30, o
 marcador some do gráfico e a nota explica por quê — não tente "consertar" isso plotando a faixa.
 

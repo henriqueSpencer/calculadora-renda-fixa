@@ -460,8 +460,10 @@ export default function Comparador() {
   const [prazoMode, setPrazoMode] = useState('dias');   /* 'dias' | 'data' */
   const [base, setBase] = useState(252);                /* 252 | 365 */
   const [view, setView] = useState('nom');
+  const [chartView, setChartView] = useState('pedagio');   /* 'pedagio' | 'vantagem' */
   const ipcaDec = ipca / 100;
   const real = view === 'real';
+  const pedagioView = chartView === 'pedagio';
   const b252 = base === 252;
 
   const [nome, setNome] = useState('Tesouro IPCA+ 2035');
@@ -499,27 +501,34 @@ export default function Comparador() {
     [30, 180, 181, 360, 361, 720, 721, 1825, 3650, chartMax, dias].forEach((d) => { if (d >= CHART_MIN_D && d <= chartMax) set.add(d); });
     const xs = Array.from(set).sort((a, b) => a - b);
     const disp = (x) => (real ? deflate(x, ipcaDec) : x) * 100;
-    /* Duas curvas, na moeda da taxa líquida anual:
-       - liq  = o que ESTE título entrega líquido em cada prazo (e o que um isento
-                precisaria pagar para empatar — no intervalo do gráfico o IOF é zero);
-       - trib = o BRUTO que um tributado (CDB, Tesouro pré) teria que mostrar para
-                empatar com esse líquido, dado o IR da faixa daquele prazo.
-       A área entre as duas é o pedágio do IR. */
+    /* Curvas, todas em taxa líquida anual:
+       - liq  = o que ESTE título entrega líquido em cada prazo;
+       - trib = (visão PEDÁGIO) o BRUTO que um tributado precisaria mostrar para
+                empatar com esse líquido — fica acima, e o vão é o IR do concorrente;
+       - cdb  = (visão VANTAGEM) o LÍQUIDO de um CDB tributado de MESMA taxa bruta.
+                Este encosta no líquido do título quando o imposto se iguala
+                (ex.: Smart Selic vs CDB depois de 720 dias). */
     const rows = xs.map((d) => {
       const t = b252 ? Math.max(1e-6, cumDU[d] / 252) : Math.max(1e-6, d / 365);
       const rbBruta = Math.pow(1 + iBruta, t) - 1;
       const aTit = smart ? IR_SMART_SELIC : aliquotaEfetiva(d, isento);
       const netNom = Math.pow(1 + rbBruta * (1 - aTit), 1 / t) - 1;
+      const cdbNetNom = Math.pow(1 + rbBruta * (1 - aliquotaEfetiva(d, false)), 1 / t) - 1;
       const brutoTribNom = brutoEquivalente(netNom, t, aliquotaEfetiva(d, false));
       const liq = disp(netNom);
+      const cdb = disp(cdbNetNom);
       const trib = disp(brutoTribNom);
-      return { dias: d, liq, trib, faixa: [liq, trib] };
+      return { dias: d, liq, cdb, trib, faixaP: [liq, trib], faixaV: [cdb, liq] };
     });
     let lo = Infinity, hi = -Infinity;
-    rows.forEach((r) => { lo = Math.min(lo, r.liq); hi = Math.max(hi, r.trib); });
+    rows.forEach((r) => {
+      const a = pedagioView ? r.liq : r.cdb;
+      const b = pedagioView ? r.trib : r.liq;
+      lo = Math.min(lo, a, b); hi = Math.max(hi, a, b);
+    });
     const pad = Math.max(0.3, (hi - lo) * 0.14);
     return { rows, dom: [lo - pad, hi + pad] };
-  }, [iBruta, isento, smart, dias, ipcaDec, real, b252, cumDU, chartMax]);
+  }, [iBruta, isento, smart, dias, ipcaDec, real, pedagioView, b252, cumDU, chartMax]);
 
   const iofAtual = aliquotaIOF(dias);
   const temIOF = iofAtual > 0;                /* resgate antes do 30º dia */
@@ -530,6 +539,9 @@ export default function Comparador() {
   const yT = real ? T.txLiqRealAno : T.txLiqAno;
   const yTribNom = brutoEquivalente(T.txLiqAno, tAtual, aliquotaEfetiva(dias, false));
   const yTrib = real ? deflate(yTribNom, ipcaDec) : yTribNom;
+  const yCdbNom = Math.pow(1 + (Math.pow(1 + iBruta, tAtual) - 1) * (1 - aliquotaEfetiva(dias, false)), 1 / tAtual) - 1;
+  const yCdb = real ? deflate(yCdbNom, ipcaDec) : yCdbNom;
+  const y2 = pedagioView ? yTrib : yCdb;   /* o marcador da segunda linha */
   const aliqAtual = aliquotaIR(dias);
 
   const metrics = [
@@ -552,13 +564,18 @@ export default function Comparador() {
   const CustomTip = ({ active, payload, label }) => {
     if (!active || !payload || !payload.length) return null;
     const liq = payload.find((x) => x.dataKey === 'liq')?.value ?? 0;
-    const trib = payload.find((x) => x.dataKey === 'trib')?.value ?? 0;
+    const seg = payload.find((x) => x.dataKey === (pedagioView ? 'trib' : 'cdb'))?.value ?? 0;
     return (
       <div style={{ background: '#100E07', border: '1px solid #413B29', borderRadius: 10, padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 12.5 }}>
         <div style={{ color: '#9A9078', marginBottom: 5 }}>{decAuto(label, 0)} dias · {decAuto(cumDU[label] || 0, 0)} úteis · líq. {real ? 'real' : 'nominal'}</div>
         <div style={{ color: ACC_A }}>{nome} (líq.): {pct(liq, 2)} a.a.</div>
-        <div style={{ color: ACC_B }}>Tributado p/ empatar (bruto): {pct(trib, 2)} a.a.</div>
-        <div style={{ color: '#E8756A', marginTop: 2 }}>Pedágio do IR: +{pct(trib - liq, 2)} p.p.</div>
+        {pedagioView ? <>
+          <div style={{ color: ACC_B }}>Tributado p/ empatar (bruto): {pct(seg, 2)} a.a.</div>
+          <div style={{ color: '#E8756A', marginTop: 2 }}>Pedágio do IR: +{pct(seg - liq, 2)} p.p.</div>
+        </> : <>
+          <div style={{ color: ACC_B }}>CDB de mesma taxa (líq.): {pct(seg, 2)} a.a.</div>
+          <div style={{ color: '#5CC98D', marginTop: 2 }}>Vantagem deste título: +{pct(liq - seg, 2)} p.p.</div>
+        </>}
         <div style={{ color: '#9A9078', marginTop: 2 }}>IR do tributado nesse prazo: {pct(aliquotaIR(label) * 100, 1)}</div>
       </div>
     );
@@ -765,20 +782,37 @@ export default function Comparador() {
         <div className="card" style={{ marginTop: 16 }}>
           <div className="cardHead">
             <div>
-              <h2>Líquido do título e o bruto para empatar, conforme o prazo</h2>
-              {smart
-                ? <p>A linha de baixo é o que o <b style={{ color: '#CFC7B4' }}>Smart Selic</b> entrega líquido (lisa: 15% fixo, sem IOF). A de cima é o <b style={{ color: '#CFC7B4' }}>bruto</b> que um CDB comum precisaria mostrar para empatar. A faixa entre elas é a <b style={{ color: '#CFC7B4' }}>vantagem fiscal</b> do ETF — e encolhe conforme o prazo passa dos 720 dias.</p>
-                : <p>A linha de baixo é o que este título entrega <b style={{ color: '#CFC7B4' }}>líquido</b> (e o que um isento pagaria para empatar). A de cima é o <b style={{ color: '#CFC7B4' }}>bruto</b> que um tributado (CDB, Tesouro pré) teria que mostrar para dar o mesmo. A faixa entre elas é o <b style={{ color: '#CFC7B4' }}>pedágio do IR</b> — e encolhe conforme o prazo alonga e a alíquota cai (181, 361, 721 dias corridos).</p>}
+              <h2>{pedagioView
+                ? 'Líquido do título e o bruto para empatar, conforme o prazo'
+                : 'Líquido do título vs. um CDB de mesma taxa, conforme o prazo'}</h2>
+              {pedagioView
+                ? (smart
+                    ? <p>A linha de baixo é o que o <b style={{ color: '#CFC7B4' }}>Smart Selic</b> entrega líquido (lisa: 15% fixo, sem IOF). A de cima é o <b style={{ color: '#CFC7B4' }}>bruto</b> que um CDB comum precisaria mostrar para empatar. A faixa entre elas é a <b style={{ color: '#CFC7B4' }}>vantagem fiscal</b> do ETF — e encolhe conforme o prazo passa dos 720 dias.</p>
+                    : <p>A linha de baixo é o que este título entrega <b style={{ color: '#CFC7B4' }}>líquido</b>. A de cima é o <b style={{ color: '#CFC7B4' }}>bruto</b> que um tributado (CDB, Tesouro pré) teria que mostrar para dar o mesmo. A faixa entre elas é o <b style={{ color: '#CFC7B4' }}>pedágio do IR</b> — e encolhe conforme o prazo alonga e a alíquota cai (181, 361, 721 dias corridos).</p>)
+                : (smart
+                    ? <p>As duas linhas são <b style={{ color: '#CFC7B4' }}>líquidas</b>: o Smart Selic e um <b style={{ color: '#CFC7B4' }}>CDB de mesma taxa</b>. Até 720 dias o ETF ganha (paga 15% enquanto o CDB paga mais); dos 720 em diante os dois pagam 15% e <b style={{ color: '#CFC7B4' }}>as linhas se encontram</b> — é onde a vantagem acaba.</p>
+                    : <p>As duas linhas são <b style={{ color: '#CFC7B4' }}>líquidas</b>: este título e um <b style={{ color: '#CFC7B4' }}>CDB de mesma taxa bruta</b>. A faixa é a <b style={{ color: '#CFC7B4' }}>vantagem</b>, e ela some quando os dois passam a pagar a mesma alíquota. Se o título já é um tributado comum, as linhas coincidem — não há vantagem.</p>)}
             </div>
             <div className="chartCtl">
+              <div className="seg small">
+                <button className={pedagioView ? 'on' : ''} onClick={() => setChartView('pedagio')}>Pedágio</button>
+                <button className={!pedagioView ? 'on' : ''} onClick={() => setChartView('vantagem')}>Vantagem</button>
+              </div>
               <div className="seg small">
                 <button className={!real ? 'on' : ''} onClick={() => setView('nom')}>Nominal</button>
                 <button className={real ? 'on' : ''} onClick={() => setView('real')}>Real</button>
               </div>
               <div className="legend">
                 <span><i style={{ background: ACC_A }} />{nome} · líquido</span>
-                <span><i style={{ background: ACC_B }} />tributado p/ empatar · bruto</span>
-                <span><i style={{ background: 'rgba(232,117,106,.5)' }} />pedágio do IR</span>
+                {pedagioView
+                  ? <>
+                      <span><i style={{ background: ACC_B }} />tributado p/ empatar · bruto</span>
+                      <span><i style={{ background: 'rgba(232,117,106,.5)' }} />pedágio do IR</span>
+                    </>
+                  : <>
+                      <span><i style={{ background: ACC_B }} />CDB de mesma taxa · líquido</span>
+                      <span><i style={{ background: 'rgba(92,201,141,.5)' }} />vantagem</span>
+                    </>}
               </div>
             </div>
           </div>
@@ -793,14 +827,15 @@ export default function Comparador() {
                 {[180, 360, 720].map((b) => (<ReferenceLine key={b} x={b} stroke="#413B29" strokeDasharray="3 4" />))}
                 {real && <ReferenceLine y={0} stroke="#E8756A" strokeDasharray="4 4" strokeOpacity={0.6} />}
                 <Tooltip content={<CustomTip />} cursor={{ stroke: '#5A5238', strokeDasharray: '4 4' }} />
-                {/* a faixa entre o líquido e o bruto-para-empatar = o pedágio do IR */}
-                <Area dataKey="faixa" fill="#E8756A" fillOpacity={0.12} stroke="none" isAnimationActive={false} />
-                <Line type="linear" dataKey="trib" stroke={ACC_B} strokeWidth={2.2} dot={false} isAnimationActive={false} />
+                {/* PEDÁGIO: faixa entre o líquido e o bruto-para-empatar (o IR do concorrente).
+                    VANTAGEM: faixa entre o líquido do título e o líquido de um CDB de mesma taxa. */}
+                <Area dataKey={pedagioView ? 'faixaP' : 'faixaV'} fill={pedagioView ? '#E8756A' : '#5CC98D'} fillOpacity={0.13} stroke="none" isAnimationActive={false} />
+                <Line type="linear" dataKey={pedagioView ? 'trib' : 'cdb'} stroke={ACC_B} strokeWidth={2.2} dot={false} isAnimationActive={false} />
                 <Line type="linear" dataKey="liq" stroke={ACC_A} strokeWidth={2.4} dot={false} isAnimationActive={false} />
                 {/* abaixo de 30 dias o ponto cairia fora do eixo — o gráfico começa onde o IOF acaba */}
                 {noGrafico && <>
                   <ReferenceLine x={dias} stroke="#9A9078" strokeWidth={1} strokeDasharray="2 3" strokeOpacity={0.7} />
-                  <ReferenceDot x={dias} y={yTrib * 100} r={4.5} fill={ACC_B} stroke="#14120C" strokeWidth={2} isFront />
+                  <ReferenceDot x={dias} y={y2 * 100} r={4.5} fill={ACC_B} stroke="#14120C" strokeWidth={2} isFront />
                   <ReferenceDot x={dias} y={yT * 100} r={5} fill={ACC_A} stroke="#14120C" strokeWidth={2} isFront />
                 </>}
               </ComposedChart>
