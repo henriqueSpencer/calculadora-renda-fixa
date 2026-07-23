@@ -47,6 +47,7 @@ function Dial({ label, aside, str, setStr, step, min, max, unit, dec = 2 }) {
             className="field"
             type="text"
             inputMode="decimal"
+            aria-label={label}
             value={str}
             onChange={(e) => setStr(e.target.value)}
             onFocus={(e) => e.target.select()}
@@ -58,6 +59,7 @@ function Dial({ label, aside, str, setStr, step, min, max, unit, dec = 2 }) {
       </div>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
@@ -321,6 +323,7 @@ export default function TaxaPre() {
           </div>
           <input
             type="range"
+            aria-label="prazo em meses"
             min={1}
             max={360}
             step={1}
@@ -370,7 +373,8 @@ export default function TaxaPre() {
                 <small>% a.a.</small>
               </div>
               <p className="out-f">
-                É a taxa <b>na tela da corretora</b>. Depois do IR de {pctOf(alq, 1)} sobram exatamente{" "}
+                É a taxa <b>na tela da corretora</b>. Depois do IR de {pctOf(alq, 1)}
+                {iof > 0 && <> e do IOF de {pctOf(iof, 0)}</>} sobram exatamente{" "}
                 <b style={{ color: "var(--isen)" }}>{pctOf(iFII)}</b>.
                 <br />
                 Se for Tesouro Direto, some a custódia de 0,20%:{" "}
@@ -410,7 +414,7 @@ export default function TaxaPre() {
                 <span className="v" style={{ color: "var(--faint)" }}>{brl(provaBrutoBruto)}</span>
               </div>
               <div className="row">
-                <span className="k">− IR de {pctOf(alq, 1)}</span>
+                <span className="k">{iof > 0 ? <>− IR + IOF ({pctOf(efetiva, 1)})</> : <>− IR de {pctOf(alq, 1)}</>}</span>
                 <span className="v" style={{ color: "var(--warn)" }}>−{brl(provaIR)}</span>
               </div>
               <div className="row">

@@ -23,7 +23,7 @@ número diferente para o mesmo imposto.
 src/core/ir.js          IR regressivo, IOF regressivo, aliquotaEfetiva, brutoEquivalente, liquidar
 src/core/calendario.js  feriados ANBIMA, dias úteis, addMonths, diasCorridosEmMeses
 src/core/format.js      dec/decAuto/brl/pct/pctOf + parseBR
-src/styles/tokens.css   --sans e --mono: a tipografia do site inteiro
+src/styles/tokens.css   --display/--sans/--mono: a tipografia do site inteiro
 ```
 
 O core é folha: não importa de `pages/`, nem de `styles/`, nem do React.
@@ -49,10 +49,31 @@ isentoIR)` em qualquer conta de equivalência; `liquidar` já faz isso intername
 
 O IOF **independe da isenção de IR**: LCI/LCA/CRI/CRA são isentas de imposto de *renda*, não de
 IOF (na prática têm carência > 30 dias, o que torna o ponto acadêmico — mas a conta é a conta).
+No **comparador** a conta é a conta: o IOF entra até no isento (`aliquotaEfetiva(dias, true)`). No
+**taxa-pré** o isento empata na mesma taxa do FII, sem IOF (`iIsento = iFII`) — e isso é
+**proposital, não divergência**: os papéis isentos ali (LCI/LCA/CRI/CRA) têm carência > 30 dias e
+nunca caem na janela do IOF, enquanto o CDB tributado do outro lado pode ter liquidez diária. Não
+"unifique" isso forçando IOF no isento do taxa-pré.
 
 O gráfico "taxa × prazo" começa em `CHART_MIN_D` (30 dias) mesmo com `MIN_D` = 1: abaixo disso o
 IOF domina e anualizar um punhado de dias explode a escala. Quando o prazo é menor que 30, o
 marcador some do gráfico e a nota explica por quê — não tente "consertar" isso plotando a faixa.
+
+## Identidade visual — "Apólice" (ledger escuro)
+O site inteiro veste uma apólice cor de tinta (papel escuro **quente**, não o azul de terminal
+antigo), com quatro tintas que **carregam significado** — não as troque à toa:
+- **ametista `#B79AE6`** = o relógio dos dias CORRIDOS (o IR);
+- **pinho `#5CC98D`** = o relógio dos dias ÚTEIS (o juro) e o isento;
+- **sangue `#E8756A`** = a mordida do imposto (IOF + IR, que se empilham);
+- **latão `#E7B24E`** = o que sobra no bolso (o herói).
+
+Papel `#14120C`, tinta `#EDE7D6`. A assinatura é a **banda dos dois relógios** (`ClockBand`, no
+comparador): dois trilhos paralelos com os cortes do IR (181/361/721) entalhados **só** no trilho
+dos corridos, e o de dias úteis mais curto dentro da mesma janela. Cues de ledger: régua fina,
+lombada de latão em cada card, série da `Lei Nº 11.033/2004` na nav, tabela do IR como escada
+regressiva. As cores/vars vivem nos blocos `.rf` (comparador) e `.eq` (taxa-pré) — ao criar UI
+nova, **puxe delas**, não hardcode o azul/dourado antigos. As páginas ainda têm cores inline em JS
+(strokes de gráfico do Recharts, `heat()` da matriz): se mexer, use a paleta acima.
 
 ## Convenções que SEMPRE importam
 - **CSS é escopado, sempre.** O comparador vive sob `.rf`, o taxa-pré sob `.eq`, a navegação sob
@@ -62,8 +83,10 @@ marcador some do gráfico e a nota explica por quê — não tente "consertar" i
   com `.eq `.
 - **`dec` formata, `parseBR` interpreta.** Nos arquivos originais as duas coisas se chamavam
   `num()`, com significados opostos em cada página. Não ressuscite esse nome.
-- **Tipografia vem de `tokens.css`.** `--sans` para tudo, `--mono` (tabular) para todo número que
-  o usuário compara. **Não declare `font-family` numa página** e não reintroduza a serif: as duas
+- **Tipografia vem de `tokens.css`.** `--display` (Archivo Expanded) nos títulos, `--sans` (Archivo)
+  no corpo, `--mono` (IBM Plex Mono, tabular) para todo número que o usuário compara. Os webfonts
+  são carregados no `<link>` do `index.html`; só os stacks (com fallback de sistema) ficam no
+  `tokens.css`. **Não declare `font-family` numa página** e não reintroduza a serif: as duas
   páginas tinham stacks diferentes, e o site parecia dois sites.
 - **`base: '/'` no `vite.config.js`, nunca `'./'`.** As rotas são reais (`/taxa-pre`), então
   caminho relativo faz o navegador buscar os assets em `/taxa-pre/assets/` e quebra tudo.
@@ -84,13 +107,24 @@ marcador some do gráfico e a nota explica por quê — não tente "consertar" i
 - O taxa-pré usava uma serif nos títulos e nos números; o comparador, sans. Duas caras, um site.
 - O comparador tinha dois títulos (A e B) com veredito de quem ganhava. Hoje é um só: entrada à
   esquerda, `EquivCard` à direita, e o veredito virou painel de resultado do próprio título.
+- Os controles do taxa-pré (campos do `Dial`, sliders) não tinham `aria-label` — leitores de tela
+  anunciavam campos anônimos. Todo input/slider agora tem rótulo acessível, como no comparador.
+- Uma auditoria profunda (execução do core com centenas de inputs + revisor independente) confirmou
+  que **o core está correto** — não há erro de cálculo; os 16 testes são invariantes reais.
 
 ## Deploy
-Cloudflare Pages, build `npm run build`, output `dist/`. **O único requisito de host** é o *SPA
-fallback*: `/comparador` e `/taxa-pre` são rotas do React, não arquivos — sem o fallback, um F5
-na rota dá 404. Já resolvido por `public/_redirects` (vale para Cloudflare e Netlify). No Vercel
-seria um `vercel.json` com rewrite; o GitHub Pages não faz rewrite e exigiria trocar o router
-para hash.
+Cloudflare Pages, projeto **`calculadora-renda-fixa-crm`**, no ar em
+**https://calculadora-renda-fixa-crm.pages.dev**. Deploy é **manual** — o push no GitHub **não**
+dispara deploy. Para publicar:
+
+```bash
+npm test && npm run build && npx wrangler pages deploy dist --project-name=calculadora-renda-fixa-crm
+```
+
+**O único requisito de host** é o *SPA fallback*: `/comparador` e `/taxa-pre` são rotas do React,
+não arquivos — sem o fallback, um F5 na rota dá 404. Já resolvido por `public/_redirects` (vale
+para Cloudflare e Netlify). No Vercel seria um `vercel.json` com rewrite; o GitHub Pages não faz
+rewrite e exigiria trocar o router para hash.
 
 ## Git
 Conta **henriqueSpencer** (`gh auth switch --user henriqueSpencer`), autor
