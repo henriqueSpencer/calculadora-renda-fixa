@@ -16,6 +16,12 @@ export const faixaIndex = (diasCorridos) =>
 /** Alíquota em decimal (0.225, 0.20, 0.175, 0.15) a partir dos dias CORRIDOS. */
 export const aliquotaIR = (diasCorridos) => FAIXAS_IR[faixaIndex(diasCorridos)].aliq / 100;
 
+/* Smart Selic — ETF de renda fixa (ex.: LFTB11). Modelo simplificado, a pedido:
+   rende a Selic (na prática ≈ CDI), NÃO paga IOF, e o IR fica travado na faixa
+   MÍNIMA (15%) em qualquer prazo. É a vantagem tributária desses ETFs frente a um
+   CDB comum, que no curto prazo paga 22,5% e ainda leva IOF. */
+export const IR_SMART_SELIC = 0.15;
+
 /* IOF regressivo — Decreto 6.306/2007, Anexo I ("IOF/Títulos").
    Morde o RENDIMENTO (nunca o principal) e só existe nos 29 primeiros dias:
    96% no 1º dia, caindo ~3 pontos por dia, 3% no 29º, e ZERO do 30º em diante.
@@ -71,14 +77,16 @@ export const deflate = (nominal, ipcaDec) => (1 + nominal) / Math.max(1e-6, 1 + 
  *   `anos`   prazo no relógio da capitalização (du/252 ou dc/365) → define o juro
  * São dois relógios diferentes de propósito: é assim que a lei e o mercado funcionam.
  */
-export const liquidar = ({ i, isento, dias, anos, capital, ipcaDec }) => {
+export const liquidar = ({ i, isento, dias, anos, capital, ipcaDec, smartSelic = false }) => {
   const n = Math.max(1e-6, anos);
   const fatorBruto = Math.pow(1 + i, n);
   const fatorRendBruto = fatorBruto - 1;
 
-  /* A ordem importa: o IOF morde primeiro, e o IR incide sobre o que sobrou. */
-  const iofDec = aliquotaIOF(dias);
-  const aliqDec = isento ? 0 : aliquotaIR(dias);
+  /* A ordem importa: o IOF morde primeiro, e o IR incide sobre o que sobrou.
+     Smart Selic é a exceção do mercado: sem IOF e IR travado em 15%, seja qual for
+     o prazo — então `dias` não muda a alíquota dele. */
+  const iofDec = smartSelic ? 0 : aliquotaIOF(dias);
+  const aliqDec = smartSelic ? IR_SMART_SELIC : (isento ? 0 : aliquotaIR(dias));
   const efetivaDec = 1 - (1 - iofDec) * (1 - aliqDec);
 
   const fatorRendLiq = fatorRendBruto * (1 - efetivaDec);

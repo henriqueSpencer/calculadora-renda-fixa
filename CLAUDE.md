@@ -3,9 +3,10 @@
 SPA em React + Vite com duas calculadoras e uma navegação só. Sem backend: tudo roda no
 navegador, o build é estático.
 
-- **`/comparador`** (`src/pages/Comparador.jsx`) — **um** título (prefixado, % do CDI, CDI+ ou
-  IPCA+): quanto ele deixa no bolso depois do IR/IOF, e a tabela de equivalências ao lado — quanto
-  cada outro formato teria que pagar para empatar, com e sem isenção.
+- **`/comparador`** (`src/pages/Comparador.jsx`) — **um** título (prefixado, % do CDI, CDI+,
+  IPCA+ ou **Smart Selic**): quanto ele deixa no bolso depois do IR/IOF, e a tabela de
+  equivalências ao lado — quanto cada outro formato teria que pagar para empatar, com e sem
+  isenção.
 - **`/taxa-pre`** (`src/pages/TaxaPre.jsx`) — qual prefixado empata com o dividend yield de um FII.
 
 A rota se chama `/comparador` por herança: a página **já comparou dois títulos lado a lado** e foi
@@ -54,6 +55,15 @@ No **comparador** a conta é a conta: o IOF entra até no isento (`aliquotaEfeti
 **proposital, não divergência**: os papéis isentos ali (LCI/LCA/CRI/CRA) têm carência > 30 dias e
 nunca caem na janela do IOF, enquanto o CDB tributado do outro lado pode ter liquidez diária. Não
 "unifique" isso forçando IOF no isento do taxa-pré.
+
+**Smart Selic** (ETF de renda fixa tipo LFTB11) é o único modo com **perfil tributário próprio**:
+rende a Selic (usamos o campo **CDI** como proxy, pois Selic ≈ CDI), **não paga IOF** e o **IR
+fica travado em 15%** (a faixa mínima) em qualquer prazo — modelo simplificado a pedido. No core
+isso é a flag `smartSelic` de `liquidar` (+ `IR_SMART_SELIC`); na página é `modo === 'smart'`, que
+percorre resultado, equivalências (âncora "IR 15% fixo · sem IOF"), gráfico (curva **lisa**, sem
+degraus de faixa), memória e a banda dos relógios (sem os entalhes dos cortes). Não é isento — ao
+escolher Smart Selic, a isenção é zerada e o toggle some. Na tabela de equivalência ele **não vira
+uma linha** (`FORMATOS` = os 4 clássicos); é só um jeito de descrever o título, não um formato-alvo.
 
 O gráfico "taxa × prazo" começa em `CHART_MIN_D` (30 dias) mesmo com `MIN_D` = 1: abaixo disso o
 IOF domina e anualizar um punhado de dias explode a escala. Quando o prazo é menor que 30, o

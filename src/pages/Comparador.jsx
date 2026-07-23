@@ -9,7 +9,7 @@ import {
 } from '../core/format.js';
 import {
   FAIXAS_IR, faixaIndex, aliquotaIR, aliquotaIOF, aliquotaEfetiva,
-  brutoEquivalente, deflate, liquidar,
+  brutoEquivalente, deflate, liquidar, IR_SMART_SELIC,
 } from '../core/ir.js';
 import {
   MIN_D, MAX_D, CHART_MIN_D, hojeUTC, acumuladoDiasUteis, addDays, ymd, diffDays, fmtDate,
@@ -32,7 +32,13 @@ const MODOS = [
   { id: 'cdi', label: '% do CDI' },
   { id: 'cdiplus', label: 'CDI +' },
   { id: 'ipca', label: 'IPCA +' },
+  { id: 'smart', label: 'Smart Selic' },
 ];
+
+/* Os quatro formatos "clássicos" — os que aparecem como linhas na tabela de
+   equivalência. O Smart Selic é um jeito de DESCREVER o título (tem imposto
+   próprio), não um formato-alvo para o qual se converte uma taxa qualquer. */
+const FORMATOS = MODOS.filter((m) => m.id !== 'smart');
 
 /* ================= CAMPO NUMÉRICO ================= */
 function NumField({ value, onCommit, min = -Infinity, max = Infinity, step = 1, decimals = 2, prefix, suffix, ariaLabel }) {
@@ -86,6 +92,7 @@ const grossRate = (modo, p, cdi, ipca) => {
   if (modo === 'cdi') return (cdi / 100) * (p.perc / 100);
   if (modo === 'cdiplus') return (1 + cdi / 100) * (1 + p.spread / 100) - 1;
   if (modo === 'ipca') return (1 + ipca / 100) * (1 + p.real / 100) - 1;
+  if (modo === 'smart') return cdi / 100;   /* rende a Selic ≈ CDI */
   return 0;
 };
 
@@ -130,6 +137,12 @@ function CompLines({ modo, p, cdi, ipca, i }) {
     <div><span className="res">= {pct(i * 100, 2)} a.a.</span></div>
     <div className="obs">compõe fatores — não é somar</div>
   </>);
+  if (modo === 'smart') return (<>
+    <div><span className="op">=</span> Selic (≈ CDI) — ETF de renda fixa</div>
+    <div><span className="op">=</span> {pct(cdi, 2)}</div>
+    <div><span className="res">= {pct(i * 100, 2)} a.a.</span></div>
+    <div className="obs">o Smart Selic acompanha a Selic; aqui o CDI é o proxy dela</div>
+  </>);
   return (<>
     <div><span className="op">=</span> (1 + IPCA) × (1 + juro real) − 1</div>
     <div><span className="op">=</span> (1 + {pct(ipca, 2)}) × (1 + {pct(p.real, 2)}) − 1</div>
@@ -138,7 +151,7 @@ function CompLines({ modo, p, cdi, ipca, i }) {
   </>);
 }
 
-function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
+function EquivCard({ nome, c, dias, t, modo, isento, smart, cdi, ipca, acc, accbg }) {
   const aliq = aliquotaIR(dias);
   const iof = aliquotaIOF(dias);
   const net = c.txLiqAno;
@@ -147,8 +160,10 @@ function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
      também paga IOF, então o "bruto do isento" deixa de ser o próprio líquido. */
   const brutoTrib = brutoEquivalente(net, t, aliquotaEfetiva(dias, false));
   const brutoIsento = brutoEquivalente(net, t, aliquotaEfetiva(dias, true));
-  const alvoCDI = asFormat('cdi', isento ? brutoTrib : brutoIsento, cdi, ipca);
-  const alvoPre = asFormat('pre', isento ? brutoTrib : brutoIsento, cdi, ipca);
+  const alvoTribCDI = asFormat('cdi', brutoTrib, cdi, ipca);
+  const alvoTribPre = asFormat('pre', brutoTrib, cdi, ipca);
+  const alvoIseCDI = asFormat('cdi', brutoIsento, cdi, ipca);
+  const alvoIsePre = asFormat('pre', brutoIsento, cdi, ipca);
 
   return (
     <div className="card equivCard" style={{ '--acc': acc, '--accbg': accbg, borderTop: `2px solid ${acc}` }}>
@@ -157,8 +172,10 @@ function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
         <div>
           <b style={{ fontSize: 15 }}>{nome}</b>
           <div className="eqAnchor">
-            âncora: <b>{pct(net * 100, 2)} a.a. líquido</b> · {decAuto(dias, 0)} dias corridos · IR {pct(aliq * 100, 1)}
-            {iof > 0 && <> · <b style={{ color: '#E8756A' }}>IOF {pct(iof * 100, 0)}</b></>}
+            âncora: <b>{pct(net * 100, 2)} a.a. líquido</b> · {decAuto(dias, 0)} dias corridos ·{' '}
+            {smart
+              ? <b style={{ color: acc }}>IR 15% fixo · sem IOF</b>
+              : <>IR {pct(aliq * 100, 1)}{iof > 0 && <> · <b style={{ color: '#E8756A' }}>IOF {pct(iof * 100, 0)}</b></>}</>}
           </div>
         </div>
       </div>
@@ -168,7 +185,7 @@ function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
           <tr><th>Formato</th><th style={{ textAlign: 'right' }}>Se pagar IR</th><th style={{ textAlign: 'right' }}>Se for isento</th></tr>
         </thead>
         <tbody>
-          {MODOS.map((m) => {
+          {FORMATOS.map((m) => {
             const meTrib = modo === m.id && !isento;
             const meIse = modo === m.id && isento;
             return (
@@ -189,9 +206,11 @@ function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
       </table>
 
       <div className="eqMsg">
-        {isento
-          ? <>Para empatar com este título, um <b>tributado</b> (CDB, Tesouro, debênture) precisa pagar no mínimo <b className="k" style={{ color: acc }}>{alvoCDI}</b> — ou <b className="k" style={{ color: acc }}>{alvoPre}</b> prefixado.</>
-          : <>Uma <b>LCI/LCA isenta</b> já empata com este título pagando apenas <b className="k" style={{ color: acc }}>{alvoCDI}</b> — ou <b className="k" style={{ color: acc }}>{alvoPre}</b> prefixado.</>}
+        {smart
+          ? <>Este é um <b>Smart Selic</b> (ETF tipo LFTB11): rende a Selic, <b>sem IOF</b> e com <b>IR fixo em 15%</b>. Para empatar com ele, um <b>CDB tributado</b> precisa pagar <b className="k" style={{ color: acc }}>{alvoTribCDI}</b> — ou <b className="k" style={{ color: acc }}>{alvoTribPre}</b> prefixado. Quanto mais curto o prazo, maior essa exigência.</>
+          : isento
+            ? <>Para empatar com este título, um <b>tributado</b> (CDB, Tesouro, debênture) precisa pagar no mínimo <b className="k" style={{ color: acc }}>{alvoTribCDI}</b> — ou <b className="k" style={{ color: acc }}>{alvoTribPre}</b> prefixado.</>
+            : <>Uma <b>LCI/LCA isenta</b> já empata com este título pagando apenas <b className="k" style={{ color: acc }}>{alvoIseCDI}</b> — ou <b className="k" style={{ color: acc }}>{alvoIsePre}</b> prefixado.</>}
       </div>
     </div>
   );
@@ -199,11 +218,13 @@ function EquivCard({ nome, c, dias, t, modo, isento, cdi, ipca, acc, accbg }) {
 
 function TituloCard({ nome, setNome, modo, setModo, p, setP, isento, setIsento, iBruta, cdi, ipca, acc, accbg }) {
   const upd = (k) => (n) => setP({ ...p, [k]: n });
+  const smart = modo === 'smart';
   const formula =
     modo === 'cdi' ? `${pct(cdi, 2)} × ${decAuto(p.perc, 2)}%`
       : modo === 'cdiplus' ? `(1 + ${pct(cdi, 2)}) × (1 + ${pct(p.spread, 2)}) − 1`
         : modo === 'ipca' ? `(1 + ${pct(ipca, 2)}) × (1 + ${pct(p.real, 2)}) − 1`
-          : 'taxa contratada';
+          : smart ? 'Selic ≈ CDI'
+            : 'taxa contratada';
 
   return (
     <div className="card" style={{ '--acc': acc, '--accbg': accbg, borderTop: `2px solid ${acc}` }}>
@@ -239,22 +260,31 @@ function TituloCard({ nome, setNome, modo, setModo, p, setP, isento, setIsento, 
           <NumField value={p.real} onCommit={upd('real')} min={-20} max={50} step={0.1} decimals={2} suffix="% a.a." ariaLabel="juro real" />
         </div>
       )}
+      {smart && (
+        <div className="smartBox">
+          Rende a <b>Selic</b> — na prática ≈ CDI (<b style={{ color: acc }}>{pct(cdi, 2)} a.a.</b>). Como
+          ETF de renda fixa (tipo <b>LFTB11</b>): <b>sem IOF</b> e <b>IR fixo em 15%</b>, a faixa mínima,
+          em qualquer prazo. Ajuste a Selic no campo <b>CDI</b> lá em cima.
+        </div>
+      )}
 
       <div className="brutaBox">
         <div className="bbTop">Taxa bruta nominal <b style={{ color: acc }}>{pct(iBruta * 100, 2)} a.a.</b></div>
         <div className="bbFormula">{formula}</div>
       </div>
 
-      <div className="switch" onClick={() => setIsento(!isento)} role="switch" aria-checked={isento} tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsento(!isento); } }}>
-        <span className={'track' + (isento ? ' on' : '')} style={isento ? { background: acc } : {}}><span className="knob" /></span>
-        <span><b>Isento de IR</b><em>LCI, LCA, CRI, CRA, deb. incentivada</em></span>
-      </div>
+      {!smart && (
+        <div className="switch" onClick={() => setIsento(!isento)} role="switch" aria-checked={isento} tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsento(!isento); } }}>
+          <span className={'track' + (isento ? ' on' : '')} style={isento ? { background: acc } : {}}><span className="knob" /></span>
+          <span><b>Isento de IR</b><em>LCI, LCA, CRI, CRA, deb. incentivada</em></span>
+        </div>
+      )}
     </div>
   );
 }
 
-function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, modo, p, cdi, ipca }) {
+function StepsColumn({ nome, c, capital, dias, du, base, isento, smart, acc, accbg, modo, p, cdi, ipca }) {
   const fi = faixaIndex(dias);
   const b252 = base === 252;
   const temIOF = c.iofDec > 0;
@@ -309,13 +339,20 @@ function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, mod
         </Step>
       )}
 
-      <Step n={n()} title="Alíquota de IR — sempre dias CORRIDOS">
-        <div><span className="op">prazo</span> {decAuto(dias, 0)} dias corridos</div>
-        <div><span className="op">faixa</span> {FAIXAS_IR[fi].faixa}</div>
-        {isento
-          ? <div><span className="res" style={{ color: '#5CC98D' }}>= isento (0%)</span></div>
-          : <div><span className="res">= {pct(FAIXAS_IR[fi].aliq, 1)}</span></div>}
-        <div className="obs">a tabela do IR ignora dias úteis — conta calendário, mesmo na base 252</div>
+      <Step n={n()} title={smart ? 'Alíquota de IR — Smart Selic (fixa)' : 'Alíquota de IR — sempre dias CORRIDOS'}>
+        {smart ? (<>
+          <div><span className="op">tipo</span> ETF de renda fixa (Smart Selic)</div>
+          <div><span className="op">=</span> 15% fixo · sem IOF · qualquer prazo</div>
+          <div><span className="res">= {pct(IR_SMART_SELIC * 100, 1)}</span></div>
+          <div className="obs">não segue a tabela regressiva — a faixa mínima já vale desde o 1º dia</div>
+        </>) : (<>
+          <div><span className="op">prazo</span> {decAuto(dias, 0)} dias corridos</div>
+          <div><span className="op">faixa</span> {FAIXAS_IR[fi].faixa}</div>
+          {isento
+            ? <div><span className="res" style={{ color: '#5CC98D' }}>= isento (0%)</span></div>
+            : <div><span className="res">= {pct(FAIXAS_IR[fi].aliq, 1)}</span></div>}
+          <div className="obs">a tabela do IR ignora dias úteis — conta calendário, mesmo na base 252</div>
+        </>)}
       </Step>
 
       <Step n={n()} title="IR devido">
@@ -370,7 +407,7 @@ function StepsColumn({ nome, c, capital, dias, du, base, isento, acc, accbg, mod
    do juro, base 252): a mesma janela de calendário, porém mais curta, porque dia
    útil é sempre menos que dia corrido. Os dois miram o mesmo vencimento — a linha
    tracejada à direita. Trocar o prazo mexe tudo junto. */
-function ClockBand({ hoje, vencDate, dias, du, aliq }) {
+function ClockBand({ hoje, vencDate, dias, du, aliq, smart }) {
   const cliffs = [181, 361, 721];
   const utilPct = Math.max(0, Math.min(1, dias > 0 ? du / dias : 0)) * 100;
   return (
@@ -381,10 +418,10 @@ function ClockBand({ hoje, vencDate, dias, du, aliq }) {
       </div>
       <div className="trackArea">
         <div className="clkRow a">
-          <span className="clkTag">Dias corridos — o relógio do imposto</span>
+          <span className="clkTag">{smart ? 'Dias corridos — prazo de calendário' : 'Dias corridos — o relógio do imposto'}</span>
           <div className="clkRail" />
           <div className="clkFill" style={{ width: '100%' }} />
-          {cliffs.filter((c) => c <= dias).map((c) => (
+          {!smart && cliffs.filter((c) => c <= dias).map((c) => (
             <div key={c} className="notch" data-d={c} style={{ left: `${(c / dias) * 100}%` }} />
           ))}
           <div className="clkMark" style={{ left: '100%' }} />
@@ -400,7 +437,10 @@ function ClockBand({ hoje, vencDate, dias, du, aliq }) {
       <div className="readouts">
         <div className="ro corrido"><div className="k">Dias corridos → IR</div><div className="v">{decAuto(dias, 0)}</div></div>
         <div className="ro util"><div className="k">Dias úteis → juro (252)</div><div className="v">{decAuto(du, 0)}</div></div>
-        <div className="ro faixa"><div className="k">Faixa do IR</div><div className="v">{decAuto(aliq * 100, 1)}<small>%</small></div></div>
+        <div className="ro faixa">
+          <div className="k">{smart ? 'IR — Smart Selic' : 'Faixa do IR'}</div>
+          <div className="v">{smart ? '15' : decAuto(aliq * 100, 1)}<small>{smart ? '% fixo' : '%'}</small></div>
+        </div>
       </div>
     </div>
   );
@@ -428,6 +468,9 @@ export default function Comparador() {
   const [modo, setModo] = useState('ipca');
   const [p, setP] = useState({ pre: 13, perc: 110, spread: 2, real: 7 });
   const [isento, setIsento] = useState(false);
+  const smart = modo === 'smart';
+  /* trocar para Smart Selic zera a isenção: ele não é isento, paga 15% fixo */
+  const chooseModo = (id) => { setModo(id); if (id === 'smart') setIsento(false); };
 
   /* datas */
   const vencDate = addDays(hoje, dias);
@@ -447,7 +490,7 @@ export default function Comparador() {
   const tAtual = tFor(dias);
 
   const iBruta = grossRate(modo, p, cdi, ipca);
-  const T = liquidar({ i: iBruta, isento, dias, anos: tAtual, capital, ipcaDec });
+  const T = liquidar({ i: iBruta, isento, dias, anos: tAtual, capital, ipcaDec, smartSelic: smart });
 
   const chartMax = dias > 3650 ? MAX_D : 3650;
   const chart = useMemo(() => {
@@ -458,7 +501,8 @@ export default function Comparador() {
     const f = (d, i, ise) => {
       const t = b252 ? Math.max(1e-6, cumDU[d] / 252) : Math.max(1e-6, d / 365);
       const rb = Math.pow(1 + i, t) - 1;
-      const a = aliquotaEfetiva(d, ise);
+      /* Smart Selic: 15% fixo e sem IOF — a curva não tem degraus de faixa. */
+      const a = smart ? IR_SMART_SELIC : aliquotaEfetiva(d, ise);
       const nom = Math.pow(1 + rb * (1 - a), 1 / t) - 1;
       return (real ? deflate(nom, ipcaDec) : nom) * 100;
     };
@@ -467,7 +511,7 @@ export default function Comparador() {
     rows.forEach((r) => { lo = Math.min(lo, r.a); hi = Math.max(hi, r.a); });
     const pad = Math.max(0.3, (hi - lo) * 0.18);
     return { rows, dom: [lo - pad, hi + pad] };
-  }, [iBruta, isento, dias, ipcaDec, real, b252, cumDU, chartMax]);
+  }, [iBruta, isento, smart, dias, ipcaDec, real, b252, cumDU, chartMax]);
 
   const iofAtual = aliquotaIOF(dias);
   const temIOF = iofAtual > 0;                /* resgate antes do 30º dia */
@@ -487,7 +531,7 @@ export default function Comparador() {
       { label: 'Alíquota de IOF (resgate antes de 30 dias)', v: pct(T.iofPct, 0) },
       { label: 'IOF descontado', v: '− ' + brl(T.iofReais), neg: true },
     ] : []),
-    { label: 'Alíquota de IR', v: isento ? 'isento' : pct(T.aliqPct, 1) },
+    { label: smart ? 'Alíquota de IR (Smart Selic — 15% fixo)' : 'Alíquota de IR', v: isento ? 'isento' : pct(T.aliqPct, 1) },
     { label: 'IR descontado', v: '− ' + brl(T.irReais), neg: true },
     { label: 'Rendimento líquido', v: brl(T.rendLiq), hl: true },
     { label: 'Montante líquido final', v: brl(T.montanteLiq), hl: true },
@@ -502,7 +546,7 @@ export default function Comparador() {
       <div style={{ background: '#100E07', border: '1px solid #413B29', borderRadius: 10, padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 12.5 }}>
         <div style={{ color: '#9A9078', marginBottom: 5 }}>{decAuto(label, 0)} dias · {decAuto(cumDU[label] || 0, 0)} úteis · líq. {real ? 'real' : 'nominal'}</div>
         <div style={{ color: ACC_A }}>{nome}: {pct(va, 2)} a.a.</div>
-        <div style={{ color: '#9A9078', marginTop: 2 }}>IR da faixa: {pct(aliquotaIR(label) * 100, 1)}</div>
+        <div style={{ color: '#9A9078', marginTop: 2 }}>{smart ? 'IR fixo: 15,0%' : 'IR da faixa: ' + pct(aliquotaIR(label) * 100, 1)}</div>
       </div>
     );
   };
@@ -521,7 +565,7 @@ export default function Comparador() {
         </p>
 
         {/* ---------- ASSINATURA: OS DOIS RELÓGIOS ---------- */}
-        <ClockBand hoje={hoje} vencDate={vencDate} dias={dias} du={duAtual} aliq={aliqAtual} />
+        <ClockBand hoje={hoje} vencDate={vencDate} dias={dias} du={duAtual} aliq={aliqAtual} smart={smart} />
 
         {/* ---------- GLOBAIS ---------- */}
         <div className="card" style={{ marginTop: 24 }}>
@@ -618,9 +662,9 @@ export default function Comparador() {
 
         {/* ---------- O TÍTULO  |  O MESMO TÍTULO, EM OUTRAS ROUPAS ---------- */}
         <div className="titulos">
-          <TituloCard nome={nome} setNome={setNome} modo={modo} setModo={setModo} p={p} setP={setP}
+          <TituloCard nome={nome} setNome={setNome} modo={modo} setModo={chooseModo} p={p} setP={setP}
             isento={isento} setIsento={setIsento} iBruta={iBruta} cdi={cdi} ipca={ipca} acc={ACC_A} accbg={ACCBG_A} />
-          <EquivCard nome={nome} c={T} dias={dias} t={tAtual} modo={modo} isento={isento}
+          <EquivCard nome={nome} c={T} dias={dias} t={tAtual} modo={modo} isento={isento} smart={smart}
             cdi={cdi} ipca={ipca} acc={ACC_B} accbg={ACCBG_B} />
         </div>
 
@@ -709,7 +753,9 @@ export default function Comparador() {
           <div className="cardHead">
             <div>
               <h2>Taxa líquida ao ano conforme o prazo</h2>
-              <p>O mesmo título, resgatado em prazos diferentes. Os degraus são as trocas de faixa do IR — em 181, 361 e 721 <b style={{ color: '#CFC7B4' }}>dias corridos</b>. Repare que segurar um dia a mais, logo depois de um degrau, aumenta o que sobra no bolso.</p>
+              {smart
+                ? <p>Como o Smart Selic paga <b style={{ color: '#CFC7B4' }}>15% de IR fixo</b> e não tem IOF, a curva é <b style={{ color: '#CFC7B4' }}>lisa</b> — sem os degraus de faixa que um CDB teria. O único efeito do prazo aqui é a capitalização.</p>
+                : <p>O mesmo título, resgatado em prazos diferentes. Os degraus são as trocas de faixa do IR — em 181, 361 e 721 <b style={{ color: '#CFC7B4' }}>dias corridos</b>. Repare que segurar um dia a mais, logo depois de um degrau, aumenta o que sobra no bolso.</p>}
             </div>
             <div className="chartCtl">
               <div className="seg small">
@@ -755,14 +801,14 @@ export default function Comparador() {
         <div className="card" style={{ marginTop: 16 }}>
           <div className="cardHead"><div><h2>Memória de cálculo</h2><p>De onde sai cada número, passo a passo. Repare no prazo e na alíquota: são os dois relógios diferentes rodando no mesmo título.</p></div></div>
           <div className="stepcols solo">
-            <StepsColumn nome={nome} c={T} capital={capital} dias={dias} du={duAtual} base={base} isento={isento} acc={ACC_A} accbg={ACCBG_A} modo={modo} p={p} cdi={cdi} ipca={ipca} />
+            <StepsColumn nome={nome} c={T} capital={capital} dias={dias} du={duAtual} base={base} isento={isento} smart={smart} acc={ACC_A} accbg={ACCBG_A} modo={modo} p={p} cdi={cdi} ipca={ipca} />
           </div>
         </div>
 
         {/* ---------- TABELA IR ---------- */}
         <div className="card" style={{ marginTop: 16 }}>
           <div className="cardHead">
-            <div><h2>Tabela regressiva do IR — em dias corridos</h2><p>Lei 11.033/2004. Vale para CDB, RDB, LC, Tesouro Direto (inclusive IPCA+), debêntures comuns e fundos de renda fixa. Títulos isentos não entram nela.</p></div>
+            <div><h2>Tabela regressiva do IR — em dias corridos</h2><p>Lei 11.033/2004. Vale para CDB, RDB, LC, Tesouro Direto (inclusive IPCA+), debêntures comuns e fundos de renda fixa. Títulos isentos não entram nela{smart && <> — e o <b style={{ color: '#CFC7B4' }}>Smart Selic</b> também não: paga 15% fixo (a faixa mínima) desde o 1º dia</>}.</p></div>
           </div>
           <table>
             <thead><tr><th>Prazo da aplicação</th><th>Intervalo (dias corridos)</th><th style={{ textAlign: 'right' }}>Alíquota sobre o rendimento</th></tr></thead>

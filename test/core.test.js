@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   FAIXAS_IR, aliquotaIR, aliquotaIOF, aliquotaEfetiva,
-  brutoEquivalente, regraDeBolso, deflate, liquidar,
+  brutoEquivalente, regraDeBolso, deflate, liquidar, IR_SMART_SELIC,
 } from '../src/core/ir.js';
 import { diasCorridosEmMeses, acumuladoDiasUteis, addMonths, diffDays } from '../src/core/calendario.js';
 
@@ -180,4 +180,25 @@ test('IOF: brutoEquivalente continua sendo a inversa exata, agora com a alíquot
       perto(volta, 0.15, 1e-9);
     }
   }
+});
+
+test('Smart Selic: IR travado em 15% e sem IOF, em qualquer prazo', () => {
+  assert.equal(IR_SMART_SELIC, 0.15);
+  for (const dias of [10, 29, 180, 365, 730, 3650]) {
+    const T = liquidar({ i: 0.15, isento: false, dias, anos: dias / 365, capital: 1000, ipcaDec: 0.045, smartSelic: true });
+    assert.equal(T.iofDec, 0, `Smart Selic não paga IOF (dias=${dias})`);
+    assert.equal(T.aliqDec, 0.15, `Smart Selic paga 15% (dias=${dias})`);
+  }
+});
+
+test('Smart Selic ganha de um CDB de mesma taxa no curto prazo (15% vs 22,5% + IOF)', () => {
+  const dias = 200, anos = dias / 365, i = 0.15;
+  const ss = liquidar({ i, isento: false, dias, anos, capital: 1000, ipcaDec: 0.045, smartSelic: true });
+  const cdb = liquidar({ i, isento: false, dias, anos, capital: 1000, ipcaDec: 0.045 });
+  assert.ok(ss.txLiqAno > cdb.txLiqAno, `Smart Selic (${ss.txLiqAno}) deveria bater o CDB (${cdb.txLiqAno})`);
+  // e num prazo longo (>720d) os dois pagam 15%: empatam
+  const dl = 800, al = dl / 365;
+  const ssL = liquidar({ i, isento: false, dias: dl, anos: al, capital: 1000, ipcaDec: 0.045, smartSelic: true });
+  const cdbL = liquidar({ i, isento: false, dias: dl, anos: al, capital: 1000, ipcaDec: 0.045 });
+  perto(ssL.txLiqAno, cdbL.txLiqAno, 1e-12);
 });
